@@ -52,259 +52,333 @@
 
 - 3 server ubuntu 18.04
 	
-	+ 172.16.68.218 etcd1
+	+ 172.16.68.208 etcd0
 	
-	+ 172.16.68.219 etcd2
+	+ 172.16.68.209 etcd1
 	
-	+ 172.16.68.220 etcd3
+	+ 172.16.68.217 etcd2
 
-### Thực hiện trên cả 3 node:
+### Install cfssl (Cloudflare ssl) thực hiện trên node etcd0:
 
-- Disable swap:
-  
-  ```
-  swapoff -a
-  ```
-
-- Install Kubeadm Packages:
-  
-  ```
-  apt update -y && apt upgrade -y
-  
-  apt-get install apt-transport-https curl -y
-  
-  curl -s https://packages.cloud.google.com/apt/doc/apt-key.gpg | sudo apt-key add
-  
-  vim /etc/apt/sources.list.d/kubernetes.list
-  deb http://apt.kubernetes.io/ kubernetes-xenial main
-  
-  apt update
-  apt install -y kubeadm kubelet kubectl
-  ```
-  
-- Install Docker:
+- Install and config:
 
   ```
-  apt-get install docker.io -y
+  1. wget https://pkg.cfssl.org/R1.2/cfssl_linux-amd64
+  
+  2. wget https://pkg.cfssl.org/R1.2/cfssljson_linux-amd64
+  
+  3. chmod +x cfssl*
+  
+  4. mv cfssl_linux-amd64 /usr/local/bin/cfssl
+  
+  5. mv cfssljson_linux-amd64 /usr/local/bin/cfssljson
   ```
 
-- Configure the kubelet to be a service manager for etcd:
+- Verify the installation:
+  
+  ```
+  cfssl version
+  ```
+  
+### Generating the TLS certificates:
+
+- Tạo file cấu hình CA (certificate authority):
 
   ```
-  cat << EOF > /etc/systemd/system/kubelet.service.d/20-etcd-service-manager.conf
+  vim ca-config.json
+  {
+    "signing": {
+      "default": {
+        "expiry": "8760h"
+      },
+      "profiles": {
+        "kubernetes": {
+          "usages": ["signing", "key encipherment", "server auth", "client auth"],
+          "expiry": "8760h"
+        }
+      }
+    }
+  }
+  ```
+  
+- Create the certificate authority signing request configuration file.
+  
+  ```
+  vim ca-csr.json
+  {
+    "CN": "Kubernetes",
+    "key": {
+      "algo": "rsa",
+      "size": 2048
+    },
+    "names": [
+    {
+      "C": "IE",
+      "L": "VNPT",
+      "O": "Kubernetes",
+      "OU": "CA",
+      "ST": "VNPT Co."
+    }
+   ]
+  }
+  ```
+
+- Generate the certificate authority certificate and private key.
+
+  ```
+  cfssl gencert -initca ca-csr.json | cfssljson -bare ca
+  ```
+
+- Verify that the ca-key.pem and the ca.pem were generated.
+  
+  ```
+  ll
+  ```
+
+### Creating the certificate for the Etcd cluster
+
+- Create the certificate signing request configuration file.
+
+  ```
+  vim kubernetes-csr.json
+  {
+    "CN": "kubernetes",
+    "key": {
+      "algo": "rsa",
+      "size": 2048
+    },
+    "names": [
+    {
+      "C": "IE",
+      "L": "VNPT",
+      "O": "Kubernetes",
+      "OU": "Kubernetes",
+      "ST": "VNPT Co."
+    }
+   ]
+  }
+  ```
+- Generate the certificate and private key.
+
+  ```
+  cfssl gencert \
+  -ca=ca.pem \
+  -ca-key=ca-key.pem \
+  -config=ca-config.json \
+  -hostname=172.16.68.208,172.16.68.209,172.16.68.217,172.16.68.215,127.0.0.1,kubernetes.default \
+  -profile=kubernetes kubernetes-csr.json | \
+  cfssljson -bare kubernetes
+  ```
+  
+- Verify that the kubernetes-key.pem and the kubernetes.pem file were generated.
+
+  ```
+  ll
+  ```
+
+- Copy the certificate to each nodes on etcd cluster:
+
+  ```
+  scp ca.pem kubernetes.pem kubernetes-key.pem root@172.16.68.209:~
+  
+  scp ca.pem kubernetes.pem kubernetes-key.pem root@172.16.68.217:~
+  ```
+
+### Install and config Etcd cluster:
+
+##### Trên node etcd0:
+
+- 1. Create a configuration directory for Etcd.
+  
+  ```
+  mkdir /etc/etcd /var/lib/etcd
+  ```
+
+- 2. Move the certificates to the configuration directory.
+
+  ```
+  mv ~/ca.pem ~/kubernetes.pem ~/kubernetes-key.pem /etc/etcd
+  ```
+  
+- 3. Download the etcd binaries.
+
+  ```
+  wget https://github.com/coreos/etcd/releases/download/v3.3.9/etcd-v3.3.9-linux-amd64.tar.gz
+  ```
+  
+- 4. Extract the etcd archive.
+
+  ```
+  tar xvzf etcd-v3.3.9-linux-amd64.tar.gz
+  ```
+  
+- 5. Move the etcd binaries to /usr/local/bin.
+
+  ```
+  mv etcd-v3.3.9-linux-amd64/etcd* /usr/local/bin/
+  ```
+
+- 6. Create an etcd systemd unit file.
+
+  ```
+  vim /etc/systemd/system/etcd.service
+  
+  [Unit]
+  Description=etcd
+  Documentation=https://github.com/coreos
+
   [Service]
-  ExecStart=
-  ExecStart=/usr/bin/kubelet --address=127.0.0.1 --pod-manifest-path=/etc/kubernetes/manifests --allow-privileged=true
-  Restart=always
-  EOF
+  ExecStart=/usr/local/bin/etcd \
+    --name etcd0 \
+    --cert-file=/etc/etcd/kubernetes.pem \
+    --key-file=/etc/etcd/kubernetes-key.pem \
+    --peer-cert-file=/etc/etcd/kubernetes.pem \
+    --peer-key-file=/etc/etcd/kubernetes-key.pem \
+    --trusted-ca-file=/etc/etcd/ca.pem \
+    --peer-trusted-ca-file=/etc/etcd/ca.pem \
+    --peer-client-cert-auth \
+    --client-cert-auth \
+    --initial-advertise-peer-urls https://172.16.68.208:2380 \
+    --listen-peer-urls https://172.16.68.208:2380 \
+    --listen-client-urls https://172.16.68.208:2379,http://127.0.0.1:2379 \
+    --advertise-client-urls https://172.16.68.208:2379 \
+    --initial-cluster-token etcd-cluster-0 \
+    --initial-cluster etcd0=https://172.16.68.208:2380,etcd1=https://172.16.68.209:2380,etcd2=https://172.16.68.217:2380 \
+    --initial-cluster-state new \
+    --data-dir=/var/lib/etcd
+  Restart=on-failure
+  RestartSec=5
+
+  [Install]
+  WantedBy=multi-user.target
+  ```
   
+##### Trên node etcd1:
+
+- Thực hiện các bước 1 -> 5 tương tự như trên node etcd0
+
+- 6. Create an etcd systemd unit file.
+
+  ```
+  vim /etc/systemd/system/etcd.service
+  
+  [Unit]
+  Description=etcd
+  Documentation=https://github.com/coreos
+
+  [Service]
+  ExecStart=/usr/local/bin/etcd \
+    --name etcd1 \
+    --cert-file=/etc/etcd/kubernetes.pem \
+    --key-file=/etc/etcd/kubernetes-key.pem \
+    --peer-cert-file=/etc/etcd/kubernetes.pem \
+    --peer-key-file=/etc/etcd/kubernetes-key.pem \
+    --trusted-ca-file=/etc/etcd/ca.pem \
+    --peer-trusted-ca-file=/etc/etcd/ca.pem \
+    --peer-client-cert-auth \
+    --client-cert-auth \
+    --initial-advertise-peer-urls https://172.16.68.209:2380 \
+    --listen-peer-urls https://172.16.68.209:2380 \
+    --listen-client-urls https://172.16.68.209:2379,http://127.0.0.1:2379 \
+    --advertise-client-urls https://172.16.68.209:2379 \
+    --initial-cluster-token etcd-cluster-0 \
+    --initial-cluster etcd0=https://172.16.68.208:2380,etcd1=https://172.16.68.209:2380,etcd2=https://172.16.68.217:2380 \
+    --initial-cluster-state new \
+    --data-dir=/var/lib/etcd
+  Restart=on-failure
+  RestartSec=5
+
+  [Install]
+  WantedBy=multi-user.target
+  ```
+
+##### Trên node etcd2:
+
+- Thực hiện các bước 1 -> 5 tương tự như trên node etcd0
+
+- 6. Create an etcd systemd unit file.
+
+  ```
+  vim /etc/systemd/system/etcd.service
+  
+  [Unit]
+  Description=etcd
+  Documentation=https://github.com/coreos
+
+  [Service]
+  ExecStart=/usr/local/bin/etcd \
+    --name etcd2 \
+    --cert-file=/etc/etcd/kubernetes.pem \
+    --key-file=/etc/etcd/kubernetes-key.pem \
+    --peer-cert-file=/etc/etcd/kubernetes.pem \
+    --peer-key-file=/etc/etcd/kubernetes-key.pem \
+    --trusted-ca-file=/etc/etcd/ca.pem \
+    --peer-trusted-ca-file=/etc/etcd/ca.pem \
+    --peer-client-cert-auth \
+    --client-cert-auth \
+    --initial-advertise-peer-urls https://172.16.68.217:2380 \
+    --listen-peer-urls https://172.16.68.217:2380 \
+    --listen-client-urls https://172.16.68.217:2379,http://127.0.0.1:2379 \
+    --advertise-client-urls https://172.16.68.217:2379 \
+    --initial-cluster-token etcd-cluster-0 \
+    --initial-cluster etcd0=https://172.16.68.208:2380,etcd1=https://172.16.68.209:2380,etcd2=https://172.16.68.217:2380 \
+    --initial-cluster-state new \
+    --data-dir=/var/lib/etcd
+  Restart=on-failure
+  RestartSec=5
+
+  [Install]
+  WantedBy=multi-user.target
+  ```
+
+##### Trên cả 3 node etcd:
+
+- Reload the daemon configuration.
+  
+  ```
   systemctl daemon-reload
-  systemctl restart kubelet
   ```
-
-### Thực hiện trên node etcd-1:
-
-- Create configuration files for kubeadm:
-
-```
-export HOST0=172.16.68.218
-export HOST1=172.16.68.219
-export HOST2=172.16.68.220
-
-# Create temp directories to store files that will end up on other hosts.
-mkdir -p /tmp/${HOST0}/ /tmp/${HOST1}/ /tmp/${HOST2}/
-
-ETCDHOSTS=(${HOST0} ${HOST1} ${HOST2})
-NAMES=("infra0" "infra1" "infra2")
-
-for i in "${!ETCDHOSTS[@]}"; do
-HOST=${ETCDHOSTS[$i]}
-NAME=${NAMES[$i]}
-cat << EOF > /tmp/${HOST}/kubeadmcfg.yaml
-apiVersion: "kubeadm.k8s.io/v1beta1"
-kind: ClusterConfiguration
-etcd:
-    local:
-        serverCertSANs:
-        - "${HOST}"
-        peerCertSANs:
-        - "${HOST}"
-        extraArgs:
-            initial-cluster: ${NAMES[0]}=https://${ETCDHOSTS[0]}:2380,${NAMES[1]}=https://${ETCDHOSTS[1]}:2380,${NAMES[2]}=https://${ETCDHOSTS[2]}:2380
-            initial-cluster-state: new
-            name: ${NAME}
-            listen-peer-urls: https://${HOST}:2380
-            listen-client-urls: https://${HOST}:2379
-            advertise-client-urls: https://${HOST}:2379
-            initial-advertise-peer-urls: https://${HOST}:2380
-EOF
-done  
-```
-
-- Tạo certificate authority:
-
-```
-etcd1# kubeadm init phase certs etcd-ca
-```
-
-- Tạo certificates cho tất cả các etcd node ( thực hiện trên node etcd1):
-
-```
-kubeadm init phase certs etcd-server --config=/tmp/${HOST2}/kubeadmcfg.yaml
-kubeadm init phase certs etcd-peer --config=/tmp/${HOST2}/kubeadmcfg.yaml
-kubeadm init phase certs etcd-healthcheck-client --config=/tmp/${HOST2}/kubeadmcfg.yaml
-kubeadm init phase certs apiserver-etcd-client --config=/tmp/${HOST2}/kubeadmcfg.yaml
-cp -R /etc/kubernetes/pki /tmp/${HOST2}/
-
-# cleanup non-reusable certificates
-find /etc/kubernetes/pki -not -name ca.crt -not -name ca.key -type f -delete
-
-kubeadm init phase certs etcd-server --config=/tmp/${HOST1}/kubeadmcfg.yaml
-kubeadm init phase certs etcd-peer --config=/tmp/${HOST1}/kubeadmcfg.yaml
-kubeadm init phase certs etcd-healthcheck-client --config=/tmp/${HOST1}/kubeadmcfg.yaml
-kubeadm init phase certs apiserver-etcd-client --config=/tmp/${HOST1}/kubeadmcfg.yaml
-cp -R /etc/kubernetes/pki /tmp/${HOST1}/
-find /etc/kubernetes/pki -not -name ca.crt -not -name ca.key -type f -delete
-
-kubeadm init phase certs etcd-server --config=/tmp/${HOST0}/kubeadmcfg.yaml
-kubeadm init phase certs etcd-peer --config=/tmp/${HOST0}/kubeadmcfg.yaml
-kubeadm init phase certs etcd-healthcheck-client --config=/tmp/${HOST0}/kubeadmcfg.yaml
-kubeadm init phase certs apiserver-etcd-client --config=/tmp/${HOST0}/kubeadmcfg.yaml
-# No need to move the certs because they are for HOST0
-
-# clean up certs that should not be copied off this host
-find /tmp/${HOST2} -name ca.key -type f -delete
-find /tmp/${HOST1} -name ca.key -type f -delete
-```
-
-- Thực hiện copy certificates and kubeadm configs tới 2 node etcd-2, etcd-3:
+  
+- Enable etcd to start at boot time.
+  
+  ```
+  systemctl enable etcd
+  ```
+  
+- Start etcd.
 
   ```
-  etcd1# scp -r /tmp/${HOST1}/* ${HOST1}:
-  etcd1# scp -r /tmp/${HOST2}/* ${HOST2}:
+  systemctl start etcd
   ```
 
-- Truy cập vào etcd-2 và thực hiện:
-
+- Verify etcd-cluster:
+  
   ```
-  etcd2# cd /root
-  etcd2# mv pki /etc/kubernetes/
-  ```
+  ETCDCTL_API=3 etcdctl --write-out=table member list
+  +------------------+---------+-------+----------------------------+----------------------------+
+  |        ID        | STATUS  | NAME  |         PEER ADDRS         |        CLIENT ADDRS        |
+  +------------------+---------+-------+----------------------------+----------------------------+
+  | ab84f8691a2c742c | started | etcd0 | https://172.16.68.208:2380 | https://172.16.68.208:2379 |
+  | e1a8c0925289a69d | started | etcd1 | https://172.16.68.209:2380 | https://172.16.68.209:2379 |
+  | f6a2daf825ab64d5 | started | etcd2 | https://172.16.68.217:2380 | https://172.16.68.217:2379 |
+  +------------------+---------+-------+----------------------------+----------------------------+
 
-- Truy cập vào etcd-3 và thực hiện:
-
-  ```
-  etcd3# cd /root
-  etcd3# mv pki /etc/kubernetes/
-  ```
-
-- Trên tất cả các node etcd, thực hiện tạo static manifest for etcd cluster với lệnh kubeadm:
-
-  ```
-  etcd1# kubeadm init phase etcd local --config=/tmp/172.16.68.218/kubeadmcfg.yaml
-
-  etcd2# kubeadm init phase etcd local --config=/root/kubeadmcfg.yaml
-
-  etcd3# kubeadm init phase etcd local --config=/root/kubeadmcfg.yaml
-  ```
-
-- Check cụm cluster etcd vừa khởi tạo (Lưu ý: k8s từ phiên bản 1.13 trở lên sử dụng ETCDCTL_API version 3):
-
-  ```
-  docker exec -it fc614b8ace41 /bin/sh
-  ETCDCTL_API=3 etcdctl --endpoints=https://172.16.68.218:2379,https://172.16.68.219:2379,https://172.16.68.220:2379 --cacert=/etc/kubernetes/pki/etcd/ca.crt --cert=/etc/kubernetes/pki/etcd/healthcheck-client.crt --key=/etc/kubernetes/pki/etcd/healthcheck-client.key --write-out=table endpoint status
-
+  
+  ETCDCTL_API=3 etcdctl --endpoints=https://172.16.68.208:2379,https://172.16.68.209:2379,https://172.16.68.217:2379 --cacert=/etc/etcd/ca.pem --cert=/etc/etcd/kubernetes.pem --key=/etc/etcd/kubernetes-key.pem --write-out=table endpoint status
   +----------------------------+------------------+---------+---------+-----------+-----------+------------+
   |          ENDPOINT          |        ID        | VERSION | DB SIZE | IS LEADER | RAFT TERM | RAFT INDEX |
   +----------------------------+------------------+---------+---------+-----------+-----------+------------+
-  | https://172.16.68.218:2379 | 42f932856eb887aa |  3.3.10 |  2.3 MB |     false |        80 |     118959 |
-  | https://172.16.68.219:2379 | a41333865e3c22ac |  3.3.10 |  2.3 MB |      true |        80 |     118959 |
-  | https://172.16.68.220:2379 | 7fc7860440987164 |  3.3.10 |  2.5 MB |     false |        80 |     118958 |
-  +----------------------------+------------------+---------+---------+-----------+-----------+------------+	
-
-  ```
-
-- List các member trong cụm cluster etcd:
-
-  ```
-  ETCDCTL_API=3 etcdctl --endpoints=https://172.16.68.218:2379,https://172.16.68.219:2379,https://172.16.68.220:2379 --cacert=/etc/kubernetes/pki/etcd/ca.crt --cert=/etc/kubernetes/pki/etcd/healthcheck-client.crt --key=/etc/kubernetes/pki/etcd/healthcheck-client.key --write-out=table member list
-
-  +------------------+---------+--------+----------------------------+----------------------------+
-  |        ID        | STATUS  |  NAME  |         PEER ADDRS         |        CLIENT ADDRS        |
-  +------------------+---------+--------+----------------------------+----------------------------+
-  | 42f932856eb887aa | started | infra0 | https://172.16.68.218:2380 | https://172.16.68.218:2379 |
-  | 7fc7860440987164 | started | infra2 | https://172.16.68.220:2380 | https://172.16.68.220:2379 |
-  | a41333865e3c22ac | started | infra1 | https://172.16.68.219:2380 | https://172.16.68.219:2379 |
-  +------------------+---------+--------+----------------------------+----------------------------+
-  ```
-
-- List key on k8s:
-
-  ```
-  ETCDCTL_API=3 etcdctl --endpoints=https://172.16.68.218:2379,https://172.16.68.219:2379,https://172.16.68.220:2379 --cacert=/etc/kubernetes/pki/etcd/ca.crt --cert=/etc/kubernetes/pki/etcd/healthcheck-client.crt --key=/etc/kubernetes/pki/etcd/healthcheck-client.key get / --prefix --keys-only
-  ```
-
-- Add 1 node mới vào trong cụm etcd:
-
-  - Trên node master trong cụm etcd ta thực hiện add member mới:
-
-  ```
-  ETCDCTL_API=3 etcdctl --endpoints=https://172.16.68.220:2379 --cacert=/etc/kubernetes/pki/etcd/ca.crt --cert=/etc/kubernetes/pki/etcd/healthcheck-client.crt --key=/etc/kubernetes/pki/etcd/healthcheck-client.key member add infra3 --peer-urls=https://172.16.68.213:2380
-  ```
-  
-  - Trên node mới ( 172.16.68.213):
-  
-  - Bước 1: copy 2 file ca.crt và ca.key từ etcd1 sang
-  
-  - Bước 2: Tạo file config `kubeadmcfg.yaml`:
-    
-	```
-	apiVersion: "kubeadm.k8s.io/v1beta1"
-    kind: ClusterConfiguration
-    etcd:
-        local:
-            serverCertSANs:
-            - "172.16.68.213"
-            peerCertSANs:
-            - "172.16.68.213"
-            extraArgs:
-                initial-cluster: infra0=https://172.16.68.218:2380,infra2=https://172.16.68.220:2380,infra3=https://172.16.68.213:2380,infra1=https://172.16.68.219:2380
-                initial-cluster-state: existing
-                name: infra3
-                listen-peer-urls: https://172.16.68.213:2380
-                listen-client-urls: https://172.16.68.213:2379
-                advertise-client-urls: https://172.16.68.213:2379
-                initial-advertise-peer-urls: https://172.16.68.213:2380
-	```
-	
-  - Bước 3: Tạo certificates trên node mới:
-    
-	```
-	kubeadm init phase certs etcd-server --config=kubeadmcfg.yaml
-	
-	kubeadm init phase certs etcd-peer --config=kubeadmcfg.yaml
-	
-	kubeadm init phase certs etcd-healthcheck-client --config=kubeadmcfg.yaml
-	
-	kubeadm init phase certs apiserver-etcd-client --config=kubeadmcfg.yaml
-
-	```
-   - Bước 4: Generate a static manifest với kubeadm:
-   
-   ```
-   kubeadm init phase etcd local --config=/root/kubeadmcfg.yaml
-   ```
-   
-- Backup etcd: 
-
-  ```
-  ETCDCTL_API=3 etcdctl --cert-file /etc/kubernetes/pki/etcd/peer.crt --key-file /etc/kubernetes/pki/etcd/peer.key --ca-file /etc/kubernetes/pki/etcd/ca.crt --endpoints https://172.16.68.219:2379 snapshot save /data/backup/etcd/snapshot.db
+  | https://172.16.68.208:2379 | ab84f8691a2c742c |   3.3.9 |  1.9 MB |      true |         6 |       8213 |
+  | https://172.16.68.209:2379 | e1a8c0925289a69d |   3.3.9 |  1.9 MB |     false |         6 |       8213 |
+  | https://172.16.68.217:2379 | f6a2daf825ab64d5 |   3.3.9 |  1.9 MB |     false |         6 |       8213 |
+  +----------------------------+------------------+---------+---------+-----------+-----------+------------+
   ```
 
 ### 6. Tham khảo:
 
-- https://kubernetes.io/docs/setup/independent/setup-ha-etcd-with-kubeadm/
+- https://github.com/etcd-io/etcd/tree/master/Documentation
 - https://github.com/etcd-io/etcd/blob/master/Documentation/op-guide/hardware.md
+- https://blog.inkubate.io/install-and-configure-a-multi-master-kubernetes-cluster-with-kubeadm/
 
 
 

@@ -8,20 +8,17 @@
 
 ### Môi trường cài đặt
 
-- 11 Ubuntu servers (18.04)
+- 8 Ubuntu servers (18.04)
 
-- 172.16.68.210 k8s-master-1
-- 172.16.68.211 k8s-master-2
-- 172.16.68.212 k8s-master-3
+- 172.16.68.208 k8s-master-1 + etcd0
+- 172.16.68.209 k8s-master-2 + etcd1
+- 172.16.68.217 k8s-master-3 + etcd2
 - 172.16.68.213 Haproxy-1
 - 172.16.68.214	Haproxy-2
 - VIP 172.16.68.215 (Haproxy-1 + HAproxy-2)
-- 172.16.68.218 etcd1 
-- 172.16.68.219 etcd2
-- 172.16.68.220 etcd3
-- 172.16.68.208 k8s-worker-1
-- 172.16.68.209 k8s-worker-2
-- 172.16.68.217 k8s-worker-3
+- 172.16.68.218 k8s-worker-1 
+- 172.16.68.219 k8s-worker-2
+- 172.16.68.220 k8s-worker-3
 - Root privileges
 
 ### Các bước cần thực hiện:
@@ -32,7 +29,7 @@
 
 ### 1. Cài đặt, cấu hình Haproxy + keepalived
 
-- Thực hiện trên 2 node 172.16.68.213, 172.16.68.214:
+- Thực hiện trên 2 node 172.16.68.212, 172.16.68.213:
 
 - Enable VIP:
 
@@ -137,9 +134,9 @@ backend k8s-master-nodes
 mode tcp
 balance roundrobin
 option tcp-check
-server k8s-master-1 172.16.68.210:6443 check fall 3 rise 2
-server k8s-master-2 172.16.68.211:6443 check fall 3 rise 2
-server k8s-master-3 172.16.68.212:6443 check fall 3 rise 2
+server k8s-master-1 172.16.68.208:6443 check fall 3 rise 2
+server k8s-master-2 172.16.68.209:6443 check fall 3 rise 2
+server k8s-master-3 172.16.68.217:6443 check fall 3 rise 2
 
 EOF
 ```
@@ -162,7 +159,7 @@ EOF
 
 ### 2. Cài đặt, cấu hình HA Etcd cluster:
 
-- Link: 
+- https://github.com/thangtq710/Kubernetes/blob/master/docs/timhieu-etcd.md
 
 ### 3. Cài đặt, cấu hình master node k8s và worker node k8s:  
 
@@ -228,45 +225,38 @@ EOF
   
   sysctl --system
   ```
+
+- Copy cert to /etc/kubernetes/pki:
   
-- Thực hiện trên etcd-1:
+  ```
+  mkdir -p /etc/kubernetes/pki/etcd
+  
+  cp /etc/etcd/ca.pem /etc/kubernetes/pki/etcd/
+  
+  cp /etc/etcd/kubernetes.pem /etc/kubernetes/pki/
+  
+  cp /etc/etcd/kubernetes-key.pem /etc/kubernetes/pki/
+  ```
 
-```
-etcd1# scp /etc/kubernetes/pki/etcd/ca.crt 172.16.68.210:
+- Create file kubeadm-config.yaml trên node master-1 (etcd0):
 
-etcd1# scp /etc/kubernetes/pki/apiserver-etcd-client.crt 172.16.68.210:
-
-etcd1# scp /etc/kubernetes/pki/apiserver-etcd-client.key 172.16.68.210:
-```
-
-- Truy cập vào master-1, thực hiện tạo file /root/kubeadm-config.yaml:
-
-```
-apiVersion: kubeadm.k8s.io/v1beta1
-kind: ClusterConfiguration
-kubernetesVersion: stable
-controlPlaneEndpoint: "172.16.68.215:6443"
-etcd:
-    external:
-        endpoints:
-        - https://172.16.68.218:2379
-        - https://172.16.68.219:2379
-        - https://172.16.68.220:2379
-        caFile: /etc/kubernetes/pki/etcd/ca.crt
-        certFile: /etc/kubernetes/pki/apiserver-etcd-client.crt
-        keyFile: /etc/kubernetes/pki/apiserver-etcd-client.key
-networking:
-    podSubnet: "10.244.0.0/16"
-```
-
-- Move key: 
-
-```
-master1# mkdir -p /etc/kubernetes/pki/etcd/ 
-master1# cp /root/ca.crt /etc/kubernetes/pki/etcd/
-master1# cp /root/apiserver-etcd-client.crt /etc/kubernetes/pki/
-master1# cp /root/apiserver-etcd-client.key /etc/kubernetes/pki/
-```
+  ```
+  apiVersion: kubeadm.k8s.io/v1beta1
+  kind: ClusterConfiguration
+  kubernetesVersion: stable
+  controlPlaneEndpoint: "172.16.68.215:6443"
+  etcd:
+      external:
+          endpoints:
+          - https://172.16.68.210:2379
+          - https://172.16.68.211:2379
+          - https://172.16.68.212:2379
+          caFile: /etc/kubernetes/pki/etcd/ca.pem
+          certFile: /etc/kubernetes/pki/kubernetes.pem
+          keyFile: /etc/kubernetes/pki/kubernetes-key.pem
+  networking:
+      podSubnet: "10.244.0.0/16"
+  ```
 
 - Thực hiện khởi tạo node master đầu tiên trong cụm k8s:
 
@@ -300,8 +290,11 @@ kubectl apply -f https://raw.githubusercontent.com/coreos/flannel/a70459be008450
 
 ```
 kubeadm join 172.16.68.215:6443 --token dzvrxa.3m8ajhpiycj3btek     --discovery-token-ca-cert-hash sha256:d770d2a3e3494fcc090641de61     --experimental-control-plane --certificate-key 635054d25d49336bdd9022ceebe44
+
 mkdir -p $HOME/.kube
+
 cp -i /etc/kubernetes/admin.conf $HOME/.kube/config
+
 chown $(id -u):$(id -g) $HOME/.kube/config
 
 ```
@@ -317,42 +310,46 @@ kubeadm join 172.16.68.215:6443 --token dzvrxa.3m8ajhpiycj3btek --discovery-toke
 ```
 root@master-1:~# kubectl get node -o wide
 NAME       STATUS   ROLES    AGE   VERSION   INTERNAL-IP     EXTERNAL-IP   OS-IMAGE             KERNEL-VERSION      CONTAINER-RUNTIME
-master-1   Ready    master   19h   v1.14.1   172.16.68.210   <none>        Ubuntu 18.04.2 LTS   4.15.0-48-generic   docker://18.9.2
-master-2   Ready    master   19h   v1.14.1   172.16.68.211   <none>        Ubuntu 18.04.2 LTS   4.15.0-48-generic   docker://18.9.2
-master-3   Ready    master   19h   v1.14.1   172.16.68.212   <none>        Ubuntu 18.04.2 LTS   4.15.0-48-generic   docker://18.9.2
-worker-1   Ready    <none>   18h   v1.14.1   172.16.68.208   <none>        Ubuntu 18.04.2 LTS   4.15.0-48-generic   docker://18.9.2
-worker-2   Ready    <none>   18h   v1.14.1   172.16.68.209   <none>        Ubuntu 18.04.2 LTS   4.15.0-48-generic   docker://18.9.2
-worker-3   Ready    <none>   18h   v1.14.1   172.16.68.217   <none>        Ubuntu 18.04.2 LTS   4.15.0-48-generic   docker://18.9.2
+master-1   Ready    master   79m   v1.14.1   172.16.68.210   <none>        Ubuntu 18.04.2 LTS   4.15.0-48-generic   docker://18.9.2
+master-2   Ready    master   76m   v1.14.1   172.16.68.211   <none>        Ubuntu 18.04.2 LTS   4.15.0-48-generic   docker://18.9.2
+master-3   Ready    master   75m   v1.14.1   172.16.68.212   <none>        Ubuntu 18.04.2 LTS   4.15.0-48-generic   docker://18.9.2
+worker1    Ready    <none>   13m   v1.14.1   172.16.68.218   <none>        Ubuntu 18.04.2 LTS   4.15.0-50-generic   docker://18.9.2
+worker2    Ready    <none>   13m   v1.14.1   172.16.68.219   <none>        Ubuntu 18.04.2 LTS   4.15.0-50-generic   docker://18.9.2
+worker3    Ready    <none>   12m   v1.14.1   172.16.68.220   <none>        Ubuntu 18.04.2 LTS   4.15.0-50-generic   docker://18.9.2
 ```
 
 - Check các pod trong namespace kube-system:
 
 ```
-root@master-1:~# kubectl get pod -o wide -n kube-system
-NAME                               READY   STATUS    RESTARTS   AGE   IP              NODE       NOMINATED NODE   READINESS GATES
-coredns-fb8b8dccf-5l9zq            1/1     Running   76         19h   10.244.0.5      master-1   <none>           <none>
-coredns-fb8b8dccf-8m67t            1/1     Running   76         19h   10.244.0.4      master-1   <none>           <none>
-kube-apiserver-master-1            1/1     Running   76         19h   172.16.68.210   master-1   <none>           <none>
-kube-apiserver-master-2            1/1     Running   76         19h   172.16.68.211   master-2   <none>           <none>
-kube-apiserver-master-3            1/1     Running   76         19h   172.16.68.212   master-3   <none>           <none>
-kube-controller-manager-master-1   1/1     Running   1          19h   172.16.68.210   master-1   <none>           <none>
-kube-controller-manager-master-2   1/1     Running   1          19h   172.16.68.211   master-2   <none>           <none>
-kube-controller-manager-master-3   1/1     Running   0          19h   172.16.68.212   master-3   <none>           <none>
-kube-flannel-ds-amd64-5gvnc        1/1     Running   0          19h   172.16.68.212   master-3   <none>           <none>
-kube-flannel-ds-amd64-bk4gh        1/1     Running   0          18h   172.16.68.208   worker-1   <none>           <none>
-kube-flannel-ds-amd64-hbwmr        1/1     Running   0          18h   172.16.68.209   worker-2   <none>           <none>
-kube-flannel-ds-amd64-l2w46        1/1     Running   0          18h   172.16.68.217   worker-3   <none>           <none>
-kube-flannel-ds-amd64-s8kr8        1/1     Running   0          19h   172.16.68.210   master-1   <none>           <none>
-kube-flannel-ds-amd64-t54g8        1/1     Running   0          19h   172.16.68.211   master-2   <none>           <none>
-kube-proxy-5njfh                   1/1     Running   0          18h   172.16.68.208   worker-1   <none>           <none>
-kube-proxy-5pfgd                   1/1     Running   0          18h   172.16.68.209   worker-2   <none>           <none>
-kube-proxy-7q6fw                   1/1     Running   0          19h   172.16.68.211   master-2   <none>           <none>
-kube-proxy-brss2                   1/1     Running   0          19h   172.16.68.212   master-3   <none>           <none>
-kube-proxy-fb4rl                   1/1     Running   0          18h   172.16.68.217   worker-3   <none>           <none>
-kube-proxy-z5dxf                   1/1     Running   0          19h   172.16.68.210   master-1   <none>           <none>
-kube-scheduler-master-1            1/1     Running   1          19h   172.16.68.210   master-1   <none>           <none>
-kube-scheduler-master-2            1/1     Running   0          19h   172.16.68.211   master-2   <none>           <none>
-kube-scheduler-master-3            1/1     Running   0          19h   172.16.68.212   master-3   <none>           <none>
-
+root@master-1:~# kubectl get pod -n kube-system
+NAME                               READY   STATUS    RESTARTS   AGE
+coredns-fb8b8dccf-b2wwb            1/1     Running   0          79m
+coredns-fb8b8dccf-z9d5h            1/1     Running   0          79m
+kube-apiserver-master-1            1/1     Running   0          78m
+kube-apiserver-master-2            1/1     Running   0          76m
+kube-apiserver-master-3            1/1     Running   0          76m
+kube-controller-manager-master-1   1/1     Running   0          78m
+kube-controller-manager-master-2   1/1     Running   0          76m
+kube-controller-manager-master-3   1/1     Running   0          76m
+kube-flannel-ds-amd64-mbmhw        1/1     Running   0          76m
+kube-flannel-ds-amd64-pc4gb        1/1     Running   0          12m
+kube-flannel-ds-amd64-pfnr2        1/1     Running   0          77m
+kube-flannel-ds-amd64-rgd2q        1/1     Running   0          76m
+kube-flannel-ds-amd64-th5v5        1/1     Running   0          13m
+kube-flannel-ds-amd64-ttkzk        1/1     Running   0          13m
+kube-proxy-7nk98                   1/1     Running   0          13m
+kube-proxy-8mtwq                   1/1     Running   0          13m
+kube-proxy-bf5zd                   1/1     Running   0          76m
+kube-proxy-h9h8f                   1/1     Running   0          12m
+kube-proxy-z8wgf                   1/1     Running   0          76m
+kube-proxy-zzt96                   1/1     Running   0          79m
+kube-scheduler-master-1            1/1     Running   0          78m
+kube-scheduler-master-2            1/1     Running   0          76m
+kube-scheduler-master-3            1/1     Running   0          76m
 ```
 
+### 4. Tổng kết:
+
+- Vậy là ta đã có 1 cụm cluster k8s với external etcd 
+
+- Link tham khảo: https://kubernetes.io/docs/setup/independent/high-availability/
