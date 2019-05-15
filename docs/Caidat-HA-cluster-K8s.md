@@ -166,7 +166,7 @@ EOF
 
 ### 3. Cài đặt, cấu hình master node k8s và worker node k8s:  
 
-**Thực hiện trên 3 node master và 3 node worker
+### Thực hiện trên 3 node master và 3 node worker:
 
 - Disable swap:
   
@@ -228,6 +228,8 @@ EOF
   
   sysctl --system
   ```
+
+### Thực hiện trên node master 1:
 
 - Copy cert to /etc/kubernetes/pki:
   
