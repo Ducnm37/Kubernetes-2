@@ -52,11 +52,11 @@
 
 - 3 server ubuntu 18.04
 	
-	+ 172.16.68.208 etcd0
+	+ 172.16.68.210 etcd0
 	
-	+ 172.16.68.209 etcd1
+	+ 172.16.68.211 etcd1
 	
-	+ 172.16.68.217 etcd2
+	+ 172.16.68.212 etcd2
 
 ### Install cfssl (Cloudflare ssl) thực hiện trên node etcd0:
 
@@ -165,7 +165,7 @@
   -ca=ca.pem \
   -ca-key=ca-key.pem \
   -config=ca-config.json \
-  -hostname=172.16.68.208,172.16.68.209,172.16.68.217,172.16.68.215,127.0.0.1,kubernetes.default \
+  -hostname=172.16.68.210,172.16.68.211,172.16.68.212,172.16.68.215,127.0.0.1,kubernetes.default \
   -profile=kubernetes kubernetes-csr.json | \
   cfssljson -bare kubernetes
   ```
@@ -179,46 +179,46 @@
 - Copy the certificate to each nodes on etcd cluster:
 
   ```
-  scp ca.pem kubernetes.pem kubernetes-key.pem root@172.16.68.209:~
+  scp ca.pem kubernetes.pem kubernetes-key.pem root@172.16.68.211:~
   
-  scp ca.pem kubernetes.pem kubernetes-key.pem root@172.16.68.217:~
+  scp ca.pem kubernetes.pem kubernetes-key.pem root@172.16.68.212:~
   ```
 
 ### Install and config Etcd cluster:
 
 ##### Trên node etcd0:
 
-- 1. Create a configuration directory for Etcd.
+- 1.Create a configuration directory for Etcd.
   
   ```
   mkdir /etc/etcd /var/lib/etcd
   ```
 
-- 2. Move the certificates to the configuration directory.
+- 2.Move the certificates to the configuration directory.
 
   ```
   mv ~/ca.pem ~/kubernetes.pem ~/kubernetes-key.pem /etc/etcd
   ```
   
-- 3. Download the etcd binaries.
+- 3.Download the etcd binaries.
 
   ```
   wget https://github.com/coreos/etcd/releases/download/v3.3.9/etcd-v3.3.9-linux-amd64.tar.gz
   ```
   
-- 4. Extract the etcd archive.
+- 4.Extract the etcd archive.
 
   ```
   tar xvzf etcd-v3.3.9-linux-amd64.tar.gz
   ```
   
-- 5. Move the etcd binaries to /usr/local/bin.
+- 5.Move the etcd binaries to /usr/local/bin.
 
   ```
   mv etcd-v3.3.9-linux-amd64/etcd* /usr/local/bin/
   ```
 
-- 6. Create an etcd systemd unit file.
+- 6.Create an etcd systemd unit file.
 
   ```
   vim /etc/systemd/system/etcd.service
@@ -238,12 +238,12 @@
     --peer-trusted-ca-file=/etc/etcd/ca.pem \
     --peer-client-cert-auth \
     --client-cert-auth \
-    --initial-advertise-peer-urls https://172.16.68.208:2380 \
-    --listen-peer-urls https://172.16.68.208:2380 \
-    --listen-client-urls https://172.16.68.208:2379,http://127.0.0.1:2379 \
-    --advertise-client-urls https://172.16.68.208:2379 \
+    --initial-advertise-peer-urls https://172.16.68.210:2380 \
+    --listen-peer-urls https://172.16.68.210:2380 \
+    --listen-client-urls https://172.16.68.210:2379 \
+    --advertise-client-urls https://172.16.68.210:2379 \
     --initial-cluster-token etcd-cluster-0 \
-    --initial-cluster etcd0=https://172.16.68.208:2380,etcd1=https://172.16.68.209:2380,etcd2=https://172.16.68.217:2380 \
+    --initial-cluster etcd0=https://172.16.68.210:2380,etcd1=https://172.16.68.211:2380,etcd2=https://172.16.68.212:2380 \
     --initial-cluster-state new \
     --data-dir=/var/lib/etcd
   Restart=on-failure
@@ -257,7 +257,7 @@
 
 - Thực hiện các bước 1 -> 5 tương tự như trên node etcd0
 
-- 6. Create an etcd systemd unit file.
+- 6.Create an etcd systemd unit file.
 
   ```
   vim /etc/systemd/system/etcd.service
@@ -277,12 +277,12 @@
     --peer-trusted-ca-file=/etc/etcd/ca.pem \
     --peer-client-cert-auth \
     --client-cert-auth \
-    --initial-advertise-peer-urls https://172.16.68.209:2380 \
-    --listen-peer-urls https://172.16.68.209:2380 \
-    --listen-client-urls https://172.16.68.209:2379,http://127.0.0.1:2379 \
-    --advertise-client-urls https://172.16.68.209:2379 \
+    --initial-advertise-peer-urls https://172.16.68.211:2380 \
+    --listen-peer-urls https://172.16.68.211:2380 \
+    --listen-client-urls https://172.16.68.211:2379 \
+    --advertise-client-urls https://172.16.68.211:2379 \
     --initial-cluster-token etcd-cluster-0 \
-    --initial-cluster etcd0=https://172.16.68.208:2380,etcd1=https://172.16.68.209:2380,etcd2=https://172.16.68.217:2380 \
+    --initial-cluster etcd0=https://172.16.68.210:2380,etcd1=https://172.16.68.211:2380,etcd2=https://172.16.68.212:2380 \
     --initial-cluster-state new \
     --data-dir=/var/lib/etcd
   Restart=on-failure
@@ -296,7 +296,7 @@
 
 - Thực hiện các bước 1 -> 5 tương tự như trên node etcd0
 
-- 6. Create an etcd systemd unit file.
+- 6.Create an etcd systemd unit file.
 
   ```
   vim /etc/systemd/system/etcd.service
@@ -316,12 +316,12 @@
     --peer-trusted-ca-file=/etc/etcd/ca.pem \
     --peer-client-cert-auth \
     --client-cert-auth \
-    --initial-advertise-peer-urls https://172.16.68.217:2380 \
-    --listen-peer-urls https://172.16.68.217:2380 \
-    --listen-client-urls https://172.16.68.217:2379,http://127.0.0.1:2379 \
-    --advertise-client-urls https://172.16.68.217:2379 \
+    --initial-advertise-peer-urls https://172.16.68.212:2380 \
+    --listen-peer-urls https://172.16.68.212:2380 \
+    --listen-client-urls https://172.16.68.212:2379 \
+    --advertise-client-urls https://172.16.68.212:2379 \
     --initial-cluster-token etcd-cluster-0 \
-    --initial-cluster etcd0=https://172.16.68.208:2380,etcd1=https://172.16.68.209:2380,etcd2=https://172.16.68.217:2380 \
+    --initial-cluster etcd0=https://172.16.68.210:2380,etcd1=https://172.16.68.211:2380,etcd2=https://172.16.68.212:2380 \
     --initial-cluster-state new \
     --data-dir=/var/lib/etcd
   Restart=on-failure
@@ -358,20 +358,25 @@
   +------------------+---------+-------+----------------------------+----------------------------+
   |        ID        | STATUS  | NAME  |         PEER ADDRS         |        CLIENT ADDRS        |
   +------------------+---------+-------+----------------------------+----------------------------+
-  | ab84f8691a2c742c | started | etcd0 | https://172.16.68.208:2380 | https://172.16.68.208:2379 |
-  | e1a8c0925289a69d | started | etcd1 | https://172.16.68.209:2380 | https://172.16.68.209:2379 |
-  | f6a2daf825ab64d5 | started | etcd2 | https://172.16.68.217:2380 | https://172.16.68.217:2379 |
+  | ab84f8691a2c742c | started | etcd0 | https://172.16.68.210:2380 | https://172.16.68.210:2379 |
+  | e1a8c0925289a69d | started | etcd1 | https://172.16.68.211:2380 | https://172.16.68.211:2379 |
+  | f6a2daf825ab64d5 | started | etcd2 | https://172.16.68.212:2380 | https://172.16.68.212:2379 |
   +------------------+---------+-------+----------------------------+----------------------------+
 
   
-  ETCDCTL_API=3 etcdctl --endpoints=https://172.16.68.208:2379,https://172.16.68.209:2379,https://172.16.68.217:2379 --cacert=/etc/etcd/ca.pem --cert=/etc/etcd/kubernetes.pem --key=/etc/etcd/kubernetes-key.pem --write-out=table endpoint status
+  ETCDCTL_API=3 etcdctl --endpoints=https://172.16.68.210:2379,https://172.16.68.211:2379,https://172.16.68.212:2379 --cacert=/etc/etcd/ca.pem --cert=/etc/etcd/kubernetes.pem --key=/etc/etcd/kubernetes-key.pem --write-out=table endpoint status
   +----------------------------+------------------+---------+---------+-----------+-----------+------------+
   |          ENDPOINT          |        ID        | VERSION | DB SIZE | IS LEADER | RAFT TERM | RAFT INDEX |
   +----------------------------+------------------+---------+---------+-----------+-----------+------------+
-  | https://172.16.68.208:2379 | ab84f8691a2c742c |   3.3.9 |  1.9 MB |      true |         6 |       8213 |
-  | https://172.16.68.209:2379 | e1a8c0925289a69d |   3.3.9 |  1.9 MB |     false |         6 |       8213 |
-  | https://172.16.68.217:2379 | f6a2daf825ab64d5 |   3.3.9 |  1.9 MB |     false |         6 |       8213 |
+  | https://172.16.68.210:2379 | ab84f8691a2c742c |   3.3.9 |  1.9 MB |      true |         6 |       8213 |
+  | https://172.16.68.211:2379 | e1a8c0925289a69d |   3.3.9 |  1.9 MB |     false |         6 |       8213 |
+  | https://172.16.68.212:2379 | f6a2daf825ab64d5 |   3.3.9 |  1.9 MB |     false |         6 |       8213 |
   +----------------------------+------------------+---------+---------+-----------+-----------+------------+
+  ```
+- List key on etcd ( sau khi kết nối tới node-master trong k8s )
+
+  ```
+  ETCDCTL_API=3 etcdctl --endpoints=https://172.16.68.210:2379 --cacert=/etc/kubernetes/pki/etcd/ca.crt --cert=/etc/kubernetes/pki/etcd/healthcheck-client.crt --key=/etc/kubernetes/pki/etcd/healthcheck-client.key get / --prefix --keys-only
   ```
 
 ### 6. Tham khảo:

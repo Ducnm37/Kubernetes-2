@@ -10,15 +10,18 @@
 
 - 8 Ubuntu servers (18.04)
 
-- 172.16.68.208 k8s-master-1 + etcd0
-- 172.16.68.209 k8s-master-2 + etcd1
-- 172.16.68.217 k8s-master-3 + etcd2
+- 172.16.68.210 k8s-master-1 + etcd0
+- 172.16.68.211 k8s-master-2 + etcd1
+- 172.16.68.212 k8s-master-3 + etcd2
+
 - 172.16.68.213 Haproxy-1
 - 172.16.68.214	Haproxy-2
 - VIP 172.16.68.215 (Haproxy-1 + HAproxy-2)
+
 - 172.16.68.218 k8s-worker-1 
 - 172.16.68.219 k8s-worker-2
 - 172.16.68.220 k8s-worker-3
+
 - Root privileges
 
 ### Các bước cần thực hiện:
@@ -29,7 +32,7 @@
 
 ### 1. Cài đặt, cấu hình Haproxy + keepalived
 
-- Thực hiện trên 2 node 172.16.68.212, 172.16.68.213:
+- Thực hiện trên 2 node 172.16.68.213, 172.16.68.214:
 
 - Enable VIP:
 
