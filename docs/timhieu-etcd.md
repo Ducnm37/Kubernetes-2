@@ -6,13 +6,13 @@
 
 - `Etcd` có các thuộc tính sau:
 
-	* Fully replicated: đảm bảo việc lưu trữ dữ liệu đồng nhất trên tất cả các node trong cụm cluster.
-	* Đảm bảo tính sẵn sàng cao
-	* Nhất quán
-	* Đơn giản
-	* Bảo mật
-	* Nhanh: Benchmark đạt 10000 writes per second.
-	* Độ tin cậy cao
+	* Đơn giản: well-defined, user-facing API (gRPC)
+	
+	* Bảo mật: Sử dụng tls để mã hóa kết nối giữa client - server và server - server.
+	
+	* Nhanh: Benchmark đạt 10000 writes/sec.
+	
+	* Độ tin cậy cao: Đảm bảo việc lưu trữ dữ liệu đồng nhất trên tất cả các node trong cụm cluster (sử dụng thuật toán Raft).
 	
 ### 2. Cơ chế hoạt động của Etcd:
 
