@@ -131,9 +131,9 @@ backend k8s-master-nodes
 mode tcp
 balance roundrobin
 option tcp-check
-server k8s-master-1 172.16.68.208:6443 check fall 3 rise 2
-server k8s-master-2 172.16.68.209:6443 check fall 3 rise 2
-server k8s-master-3 172.16.68.217:6443 check fall 3 rise 2
+server k8s-master-1 172.16.68.210:6443 check fall 3 rise 2
+server k8s-master-2 172.16.68.211:6443 check fall 3 rise 2
+server k8s-master-3 172.16.68.212:6443 check fall 3 rise 2
 
 EOF
 ```
