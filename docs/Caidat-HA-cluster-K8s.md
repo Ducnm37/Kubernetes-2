@@ -8,19 +8,13 @@
 
 ### Môi trường cài đặt
 
-- 8 Ubuntu servers (18.04)
+- 3 Ubuntu servers (18.04)
 
-- 172.16.68.210 k8s-master-1 + etcd0
-- 172.16.68.211 k8s-master-2 + etcd1
-- 172.16.68.212 k8s-master-3 + etcd2
+- 172.16.68.210: k8s-master-1 + etcd0 + worker1 + Haproxy1
+- 172.16.68.211: k8s-master-2 + etcd1 + worker2 + Haproxy2
+- 172.16.68.212: k8s-master-3 + etcd2 + worker3
 
-- 172.16.68.213 Haproxy-1
-- 172.16.68.214	Haproxy-2
 - VIP 172.16.68.215 (Haproxy-1 + HAproxy-2)
-
-- 172.16.68.218 k8s-worker-1 
-- 172.16.68.219 k8s-worker-2
-- 172.16.68.220 k8s-worker-3
 
 - Root privileges
 
@@ -32,7 +26,7 @@
 
 ### 1. Cài đặt, cấu hình Haproxy + keepalived
 
-- Thực hiện trên 2 node 172.16.68.213, 172.16.68.214:
+- Thực hiện trên 2 node 172.16.68.210, 172.16.68.211:
 
 - Enable VIP:
 
@@ -127,7 +121,7 @@ defaults
 	errorfile 504 /etc/haproxy/errors/504.http
 
 frontend k8s
-bind 172.16.68.215:6443
+bind 172.16.68.215:6445
 option tcplog
 mode tcp
 default_backend k8s-master-nodes
@@ -156,7 +150,7 @@ EOF
   ```
   ip a | grep ens3
   ens3: <BROADCAST,MULTICAST,UP,LOWER_UP> mtu 1500 qdisc pfifo_fast state UP group default qlen 1000
-    inet 172.16.68.213/24 brd 172.16.68.255 scope global ens3
+    inet 172.16.68.210/24 brd 172.16.68.255 scope global ens3
     inet 172.16.68.215/24 brd 172.16.68.255 scope global secondary ens3:1
   ```
 
@@ -249,7 +243,7 @@ EOF
   apiVersion: kubeadm.k8s.io/v1beta1
   kind: ClusterConfiguration
   kubernetesVersion: stable
-  controlPlaneEndpoint: "172.16.68.215:6443"
+  controlPlaneEndpoint: "172.16.68.215:6445"
   etcd:
       external:
           endpoints:
@@ -272,9 +266,9 @@ master1# kubeadm init --config=kubeadm-config.yaml --experimental-upload-certs
 - Trong output ở trên có các dòng sau, sử dụng để join các node master và các node worker vào cụm cluster ở phần dưới:
    
    ```
-   kubeadm join 172.16.68.215:6443 --token dzvrxa.3m8ajhpiycj3btek     --discovery-token-ca-cert-hash sha256:d770d2a3e3494fcc090641de61     --experimental-control-plane --certificate-key 635054d25d49336bdd9022ceebe447
+   kubeadm join 172.16.68.215:6445 --token dzvrxa.3m8ajhpiycj3btek     --discovery-token-ca-cert-hash sha256:d770d2a3e3494fcc090641de61     --experimental-control-plane --certificate-key 635054d25d49336bdd9022ceebe447
    
-   kubeadm join 172.16.68.215:6443 --token dzvrxa.3m8ajhpiycj3btek --discovery-token-ca-cert-hash sha256:d770d2a3e3494fcc090641de61e005b2b6d8
+   kubeadm join 172.16.68.215:6445 --token dzvrxa.3m8ajhpiycj3btek --discovery-token-ca-cert-hash sha256:d770d2a3e3494fcc090641de61e005b2b6d8
    ```
 
 - Khởi tạo môi trường:
@@ -294,7 +288,7 @@ kubectl apply -f https://raw.githubusercontent.com/coreos/flannel/a70459be008450
 - Thực hiện join các node master vào cụm k8s, ta thực hiện trên 2 node master2 và master3:
 
 ```
-kubeadm join 172.16.68.215:6443 --token dzvrxa.3m8ajhpiycj3btek     --discovery-token-ca-cert-hash sha256:d770d2a3e3494fcc090641de61     --experimental-control-plane --certificate-key 635054d25d49336bdd9022ceebe44
+kubeadm join 172.16.68.215:6445 --token dzvrxa.3m8ajhpiycj3btek     --discovery-token-ca-cert-hash sha256:d770d2a3e3494fcc090641de61     --experimental-control-plane --certificate-key 635054d25d49336bdd9022ceebe44
 
 mkdir -p $HOME/.kube
 
@@ -304,25 +298,18 @@ chown $(id -u):$(id -g) $HOME/.kube/config
 
 ```
 
-- Thực hiện join các work node vào cụm k8s, ta thực hiện trên tất cả các worker node:
+- Nếu bạn dựng 1 cụm k8s tách riêng các node master với các node worker thì mặc định khi triển khai các service, k8s sẽ chỉ thực hiện deploy các pod lên các node worker mà ko deploy lên các node master. Để thực hiện 1 node vừa làm master và làm worker, ta cần thực hiện lệnh sau:
 
-```
-kubeadm join 172.16.68.215:6443 --token dzvrxa.3m8ajhpiycj3btek --discovery-token-ca-cert-hash sha256:d770d2a3e3494fcc090641de61e005b2b6d8
-```
-
-- Check các node trong cụm k8s:
-
-```
-root@master-1:~# kubectl get node -o wide
-NAME       STATUS   ROLES    AGE   VERSION   INTERNAL-IP     EXTERNAL-IP   OS-IMAGE             KERNEL-VERSION      CONTAINER-RUNTIME
-master-1   Ready    master   79m   v1.14.1   172.16.68.210   <none>        Ubuntu 18.04.2 LTS   4.15.0-48-generic   docker://18.9.2
-master-2   Ready    master   76m   v1.14.1   172.16.68.211   <none>        Ubuntu 18.04.2 LTS   4.15.0-48-generic   docker://18.9.2
-master-3   Ready    master   75m   v1.14.1   172.16.68.212   <none>        Ubuntu 18.04.2 LTS   4.15.0-48-generic   docker://18.9.2
-worker1    Ready    <none>   13m   v1.14.1   172.16.68.218   <none>        Ubuntu 18.04.2 LTS   4.15.0-50-generic   docker://18.9.2
-worker2    Ready    <none>   13m   v1.14.1   172.16.68.219   <none>        Ubuntu 18.04.2 LTS   4.15.0-50-generic   docker://18.9.2
-worker3    Ready    <none>   12m   v1.14.1   172.16.68.220   <none>        Ubuntu 18.04.2 LTS   4.15.0-50-generic   docker://18.9.2
-```
-
+ ```
+ kubectl taint nodes --all node-role.kubernetes.io/master-
+ 
+ kubectl get node -o wide
+ NAME       STATUS   ROLES    AGE   VERSION   INTERNAL-IP     EXTERNAL-IP   OS-IMAGE             KERNEL-VERSION      CONTAINER-RUNTIME
+ master-1   Ready    master   5d    v1.14.1   172.16.68.210   <none>        Ubuntu 18.04.2 LTS   4.15.0-50-generic   docker://18.9.2
+ master-2   Ready    master   5d    v1.14.1   172.16.68.211   <none>        Ubuntu 18.04.2 LTS   4.15.0-48-generic   docker://18.9.2
+ master-3   Ready    master   5d    v1.14.1   172.16.68.212   <none>        Ubuntu 18.04.2 LTS   4.15.0-50-generic   docker://18.9.2
+ ```
+ 
 - Check các pod trong namespace kube-system:
 
 ```
@@ -352,6 +339,13 @@ kube-scheduler-master-1            1/1     Running   0          78m
 kube-scheduler-master-2            1/1     Running   0          76m
 kube-scheduler-master-3            1/1     Running   0          76m
 ```
+
+- Nếu bạn thực hiện build cụm k8s với các node master và node worker tách biệt, thực hiện join các work node vào cụm k8s, ta thực hiện trên tất cả các worker node 
+
+```
+kubeadm join 172.16.68.215:6443 --token dzvrxa.3m8ajhpiycj3btek --discovery-token-ca-cert-hash sha256:d770d2a3e3494fcc090641de61e005b2b6d8
+```
+
 
 ### 4. Tổng kết:
 
