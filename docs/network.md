@@ -10,7 +10,7 @@
 
 - Bạn có bao giờ để ý thấy 1 số container `pause` đang chạy trên tất cả các node trong k8s? 
   
-  ![alt](../images/)
+  ![alt](../images/containerpause.png)
 
 - Chúng được gọi là các `sandbox containers`, có 1 nhiệm vụ duy nhất là lưu giữ `network namespace` (netns) được chia sẻ bởi tất cả các container trong 1 pod. Với cơ chế này, trong 1 Pod khi 1 container chết hoặc 1 container mới được tạo thì IP Pod sẽ không bị thay đổi.
 
