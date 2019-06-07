@@ -1,1 +1,0 @@
- Ghi chep ve Kubernetes
