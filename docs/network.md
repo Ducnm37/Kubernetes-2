@@ -36,13 +36,13 @@
   
   ![alt](../images/podnetns.gif)
 
-  1. Gói tin từ pod1 đi vào root netns tại `vethxx`.
+	* 1.Gói tin từ pod1 đi vào root netns tại `vethxx`.
   
-  2. Gói tin được chuyển tới bridge `cbr0`, để phát hiện ra đích đến của gói tin bằng cách sử dụng `ARP request`, nói rằng pod nào có IP này? 
+	* 2.Gói tin được chuyển tới bridge `cbr0`, để phát hiện ra đích đến của gói tin bằng cách sử dụng `ARP request`, nói rằng pod nào có IP này? 
   
-  3. `vethyyy` nói rằng nó có IP đó, vì vậy bridge `cbr0` sẽ biết nơi chuyển tiếp gói tin.
+	* 3.`vethyyy` nói rằng nó có IP đó, vì vậy bridge `cbr0` sẽ biết nơi chuyển tiếp gói tin.
   
-  4. Gói tin được gửi đến `vethyyy`, và gửi đến pod2.
+	* 4.Gói tin được gửi đến `vethyyy`, và gửi đến pod2.
   
 ### 4. Việc kết nối giữa các pod trên các node khác nhau
 
@@ -64,31 +64,31 @@
 
 - Luồng gói tin gửi từ pod1 đến pod4 (trên node khác):
  
-	* 1. Gói tin từ `pod1` netns tại `eth0` trên pod 1 được gửi vào root netns tại `vethxxx`.
+	* 1.Gói tin từ `pod1` netns tại `eth0` trên pod 1 được gửi vào root netns tại `vethxxx`.
   
-  	* 2. Gói tin chuyển tới `cbr0`, và gửi yêu cầu ARP để tìm destination của gói tin.
+  	* 2.Gói tin chuyển tới `cbr0`, và gửi yêu cầu ARP để tìm destination của gói tin.
   
-  	* 3a. Vì không pod nào trên node này có địa chỉ IP cho `pod4`, nên bridge `cbr0` gửi nó tới `flannel0`. Vì bảng định tuyến của node được cấu hình với `flannel0` làm mục tiêu cho range IP pod. Các thông tin cấu hình này được lưu ở `etcd`.
+  	* 3a.Vì không pod nào trên node này có địa chỉ IP cho `pod4`, nên bridge `cbr0` gửi nó tới `flannel0`. Vì bảng định tuyến của node được cấu hình với `flannel0` làm mục tiêu cho range IP pod. Các thông tin cấu hình này được lưu ở `etcd`.
   
-  	* 3b. Khi tiến trình `flanneld` daemon nói chuyện với `kubernetes apiserver` hoặc `etcd`, nó sẽ biết về tất cả các IP của pod và các dải IP của pod đang nằm trên node nào. Vì vậy, `flannel` sẽ ánh xạ các IP pod với IP của các node. `flannel0` lấy gói tin này và đóng gói vào trong gói UDP với các header bổ sung thay đổi IP nguồn và IP đích đến các node tương ứng và gửi nó đến 1 port đặc biệt `vxlan` (thường là 8472).
+  	* 3b.Khi tiến trình `flanneld` daemon nói chuyện với `kubernetes apiserver` hoặc `etcd`, nó sẽ biết về tất cả các IP của pod và các dải IP của pod đang nằm trên node nào. Vì vậy, `flannel` sẽ ánh xạ các IP pod với IP của các node. `flannel0` lấy gói tin này và đóng gói vào trong gói UDP với các header bổ sung thay đổi IP nguồn và IP đích đến các node tương ứng và gửi nó đến 1 port đặc biệt `vxlan` (thường là 8472).
   
     ![alt](../images/packetvxlan.png)
 	
-	* 3c. Gói tin này được đóng gói được gửi qua eth0.
+	* 3c.Gói tin này được đóng gói được gửi qua eth0.
 	
-	* 4. Gói tin rời khỏi node với sourceIP là IP node1 và destIP là IP node2.
+	* 4.Gói tin rời khỏi node với sourceIP là IP node1 và destIP là IP node2.
 	
-	* 5. Bảng định tuyến của mạng vật lí đã biết cách định tuyến giữa các node, do đó nó gửi gói tin đến node2.
+	* 5.Bảng định tuyến của mạng vật lí đã biết cách định tuyến giữa các node, do đó nó gửi gói tin đến node2.
 	
-	* 6a. Gói tin này đến `eth0` của node2. Do port là port đặc biệt `vxlan`, kernel sẽ gửi gói tin đến `flannel0`.
+	* 6a.Gói tin này đến `eth0` của node2. Do port là port đặc biệt `vxlan`, kernel sẽ gửi gói tin đến `flannel0`.
 	
-	* 6b. `flannel0` sẽ thực hiện de-capsulates và gửi nó vào trong root netns.
+	* 6b.`flannel0` sẽ thực hiện de-capsulates và gửi nó vào trong root netns.
 	
-	* 6c. `Vì IP forwarding được enabled`, kernel sẽ chuyển tiếp gói tin tới `cbr0`.
+	* 6c.`Vì IP forwarding được enabled`, kernel sẽ chuyển tiếp gói tin tới `cbr0`.
 	
-	* 7. Bridge `cbr0` sẽ lấy gói tin và thực hiện 1 request ARP và phát hiện ra răng IP này thuộc về `vethyyy`.
+	* 7.Bridge `cbr0` sẽ lấy gói tin và thực hiện 1 request ARP và phát hiện ra răng IP này thuộc về `vethyyy`.
 	
-	* 8. Gói tin sẽ đi qua `vethyyy` và được gửi tới pod4.
+	* 8.Gói tin sẽ đi qua `vethyyy` và được gửi tới pod4.
 
 - Với Flannel sử dụng công nghệ `vxlan`: nhanh nhưng không có mã hóa giữa các node, nó phù hợp với mô hình private.
 	
