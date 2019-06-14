@@ -1,10 +1,10 @@
-### 1. Giới thiệu:
+## 1. Giới thiệu:
 
 - Một trong những phần phức tạp và quan trọng nhất khi tìm hiểu về k8s là phần Network. Trong phần này, tôi sẽ giới thiệu về network của 1 pod, cách thức kết nối giữa các pods trong 1 cụm cluster k8s.
 
-### 2. K8s Networking Model
+## 2. Network on Pod
 
-- Về cốt lõi, Network trong k8s có 1 triết lí thiết kế cơ bản quan trọng là: **Mỗi Pod có 1 IP duy nhất**.
+- Về cốt lõi, Network trong k8s có 1 triết lí thiết kế cơ bản quan trọng là: **Mỗi Pod có 1 IP**.
 
 - IP của 1 pod được chia sẻ bởi tất cả các container trong Pod này, và mặc định nó có thể kết nối từ tất cả các Pod khác trong 1 cụm k8s. 
 
@@ -14,7 +14,21 @@
 
 - Chúng được gọi là các `sandbox containers`, có 1 nhiệm vụ duy nhất là lưu giữ `network namespace` (netns) được chia sẻ bởi tất cả các container trong 1 pod. Với cơ chế này, trong 1 Pod khi 1 container chết hoặc 1 container mới được tạo thì IP Pod sẽ không bị thay đổi.
 
-### 3. Việc kết nối giữa các Pod trên 1 node
+## 3. Network Pod to Pod  
+
+- Trong k8s, để kết nối giữa các pods, ta cần sử dụng 1 network plugin ngoài như Flannel, Calico, Cannal, Weave... Ở trong bài này, mình sẽ nói về sử dụng `Flannel` và `Calico` để kết nối giữa các pods trong k8s.
+
+## 3.1. Flannel
+
+### Khái niệm: 
+
+- Flannel là một giải pháp overlay network được sử dụng để cấu hình network trong k8s. Về cơ bản, cơ chế overlay networks sẽ sử dụng backend (VXLAN, GRE...) để đóng gói `packet-in-packet` đi qua underlay networks (hạ tầng mạng vật lí cơ bản). Ở đây, Flannel sử dụng backend VXLAN.
+
+- Flannel chạy 1 tiến trình agent có tên là flanneld trên tất cả các node trong cụm k8s. Tiến trình này chịu trách nhiệm phân bổ `subnet lease` trên mỗi node.
+
+- Flannel sử dụng Kubernetes API hoặc gọi trực tiếp vào etcd để lưu trữ cấu hình mạng, subnet được phân bổ như nào và bất kì dữ liệu phụ trợ nào khác ( như IP public của host). 
+
+### Kết nối giữa các Pod trên 1 node
 
  ![alt](../images/rootnetworkns.png)
  
@@ -44,7 +58,7 @@
   
 	* 4.Gói tin được gửi đến `vethyyy`, và gửi đến pod2.
   
-### 4. Việc kết nối giữa các pod trên các node khác nhau
+### Kết nối giữa các pod trên các node khác nhau
 
 - Như đề cập ở trên, các pod cũng cần kết nối được trên tất cả các node trong 1 cụm k8s. Để làm được điều này, có thể sử dụng L2 (ARP across nodes), L3 (IP routing giữa các node) hoặc overlay networks. Một số plugins network được sử dụng trong k8s: flannel, calico, weave, cannal...
 
@@ -52,13 +66,9 @@
 
 - Phần tiếp theo, mình sẽ nói về một số kiểu network được sử dụng trong k8s: `flannel`, `calico`
 
-### 5. Flannel - overlay networks
+### Traffic flows
 
-- Mặc định trong k8s, Overlay networks không được yêu cầu, tuy nhiên, nó sẽ hữu ích trong 1 số tình huống cụ thể: như khi không đủ lượng IP để cấp cho các pods, hoặc mạng không thể xử lý được các routes bổ sung. Một trường hợp thường thấy là khi có giới hạn số hops mà bảng định tuyến của các nhà cung cấp cloud có thể xử lý. Ví dụ: Để đảm bảo hiệu suất mạng, bảng định tuyến AWS chỉ hỗ trợ tối đa 50 hops. Vì vậy nếu chúng ta có hơn 50 nodes trong cụm k8s, bảng định tuyến AWS sẽ không đủ. Trong trường hợp như vậy, sử dụng overlay networks sẽ có hiệu quả.
-
-- Về cơ bản, cơ chế overlay networks sẽ đóng gói `packet-in-packet` đi qua underlay networks (hạ tầng mạng vật lí cơ bản).
-
-- Traffic flows trong overlay networks, cụ thể ở đây là `flannel` sử dụng backend `VXLAN`:
+- Traffic flows trong `flannel` sử dụng backend `VXLAN`:
 
   ![alt](../images/flannel.gif)
 
@@ -94,11 +104,17 @@
 	
 	* Flannel sử dụng công nghệ `vxlan`: không có mã hóa giữa các node.
 	
-	* Flannel không hỗ trợ NetworkPolicy resource trong k8s.
+	* Flannel không hỗ trợ NetworkPolicy trong k8s.
 
-### 6. Calico
+## 3.2. Calico
 
-#### Kiến trúc, các thành phần:
+### Khái niệm:
+
+- Calico là network opensource và là 1 giải pháp bảo mật mạng cho các container, virtual machines và native host-based workloads. Calico hỗ trợ một loạt các nền tảng khác nhau bao gồm: Kubernetes, OpenShift, DockerEE, OpenStack và bare metal services.
+
+- Calico hỗ trợ Full Kubernetes network policy.
+
+### Kiến trúc, các thành phần:
 
   ![alt](../images/calico_architecture.png)
 
@@ -114,33 +130,33 @@
 	
 	* BGP Route Relector
 	
-##### Felix:
+#### Felix:
 
 - Felix là 1 daemon, chạy trên tất cả các node trong cụm k8s. Felix chịu trách nhiệm: **Interface management, Route programming, ACL programming, State reporting.**
 
-	- **Interface management**: Felix 
+	- **Interface management**: 
 
-	- **Route programming**: Felix lập trình tạo ra các routes trên mỗi node trong cụm k8s. Điều này sẽ đảm bảo định tuyến được đúng đường đi giữa các pods trong 1 cụm k8s.
+	- **Route programming**: Felix có chức năng tạo ra các routes trên mỗi node trong cụm k8s. Điều này sẽ đảm bảo định tuyến được đúng đường đi giữa các pods trong 1 cụm k8s.
 
 	- **ACL programming**: Felix cũng chịu trách nhiệm tạo ra các ACL (Access list control). Các ACL này được sử dụng để đảm bảo rằng chỉ có thể gửi các traffic hợp lệ giữa các endpoints và đảm bảo rằng các endpoints này không có khả năng phá vỡ các biện pháp bảo mật của `Calico`.
 
 	- **State reporting**: Felix cung cấp dữ liệu về tình trạng của mạng. Cụ thể, nó sẽ report các lỗi và vấn đề về mạng. Dữ liệu này được ghi vào `etcd`.
 
-##### Orchestrator plugin:
+#### Orchestrator plugin:
 
 - Với mỗi 1 nền tảng điều phối riêng (ví dụ: Openstack, Kubernetes), sẽ có plugin riêng. Mục đích của plugin này là liên kết chặt chẽ giữa `Calico` với bộ điều phối, cho phép người dùng quản lí mạng `Calico` giống như họ đang quản lí các công cụ mạng được tích hợp sẵn trong bộ điều phối. Với mỗi 1 orchestation sẽ có 1 bộ API riêng.
 
-##### Etcd:
+#### Etcd:
 
 - Thành phần được sử dụng để lưu trữ dữ liệu của `Calico`.
 
-##### BGP client (BIRD):
+#### BGP client (BIRD):
 
 - Giống như `Felix`, Calico triển khai `BGP client` trên tất cả các node trong cụm k8s. Vai trò của `BIRD` là đọc các trạng thái định tuyến từ `Felix` và phân phối nó tới trung tâm dữ liệu.
 
 - Khi `Felix` thực hiện insert các routes vào FIB của kernel Linux, `BIRD` sẽ chọn chúng và phân phối chúng đến các node khác trong cụm k8s. Điều này đảm bảo rằng traffic được định tuyến 1 cách hiệu quả, chính xác giữa các node trong cụm k8s.
 
-##### BGP route reflector (BIRD):
+#### BGP route reflector (BIRD):
 
 - Đối với các mô hình triển khai k8s lớn, BGP đơn giản có thể trở thành 1 yếu tố hạn chế vì nó yêu cầu mọi BGP client phải được kết nối với mọi BGP client khác trong mạng mesh topology.
 
@@ -176,7 +192,7 @@
   
 - MTU mặc định cho workload interfaces là 1500, đây là để phù hợp với kích thước MTU mạng phổ biến nhất. MTU mặc định cho `IP-in-IP` tunnel là 1440 để phù hợp với giá trị cần thiết trong GCE. Tương tự, mặc định cho VXLAN là 1410.
 
-- Mô hình kết nối:
+#### Mô hình kết nối:
   
   ![alt](../images/pod_calico_connect.png)
   
@@ -188,7 +204,7 @@
 	
     * Configure VXLAN encapsulation for all inter workload traffic
 
-##### Configure IP in IP encapsulation for only cross subnet traffic
+#### Configure IP in IP encapsulation for only cross subnet traffic
 
   ```
   apiVersion: projectcalico.org/v3
@@ -217,7 +233,7 @@
   ```
 - 
 
-### 6. NetworkPolicy trong k8s
+### NetworkPolicy trong k8s
 
 - Mặc định trong 1 cụm k8s, tất cả các Pod sẽ nói chuyện được với nhau. Để tăng tính bảo mật cho các ứng dụng, trong k8s sử dụng resource `NetworkPolicy`.
 
