@@ -217,7 +217,7 @@
     natOutgoing: true
   ```
 
-##### Configure IP in IP encapsulation for all inter workload traffic
+#### Configure IP in IP encapsulation for all inter workload traffic
 
 - Đây là cấu hình mặc định khi sử dụng `Calico`
 
@@ -247,7 +247,7 @@
   
   ![alt](../images/networkpolicy2.png)
 
-- **Ví dụ về NetworkPolicy:
+**Ví dụ về NetworkPolicy:
 
 - Các pod:
   
@@ -290,7 +290,7 @@
             role: backend
   ```
 
-- *NetworkPolicy trên chỉ ra rằng sẽ chỉ cho phép các kết nối từ các pods có label là `role:backend` vào các pods có label là `role:db`.
+*NetworkPolicy trên chỉ ra rằng sẽ chỉ cho phép các kết nối từ các pods có label là `role:backend` vào các pods có label là `role:db`.
 
 - Apply networkPolicy: 
 
