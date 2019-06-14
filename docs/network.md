@@ -46,11 +46,11 @@
   
 ### 4. Việc kết nối giữa các pod trên các node khác nhau
 
-- Như đề cập ở trên, các pod cũng cần kết nối được trên tât cả các node trong 1 cụm k8s. Để làm được điều này, có thể sử dụng L2 (ARP across nodes), L3 (IP routing giữa các node) hoặc overlay networks. Một số plugins network được sử dụng trong k8s: flannel, calico, weave, cannal...
+- Như đề cập ở trên, các pod cũng cần kết nối được trên tất cả các node trong 1 cụm k8s. Để làm được điều này, có thể sử dụng L2 (ARP across nodes), L3 (IP routing giữa các node) hoặc overlay networks. Một số plugins network được sử dụng trong k8s: flannel, calico, weave, cannal...
 
-- Mỗi node trong cụm k8s sẽ được gán 1 `CIDR block` duy nhất (1 dải địa chỉ IP) để cấp cho các pods, vì vậy mỗi pod có 1 IP duy nhất và không bị conflict với các pods trên 1 node khác trong cụm k8s.
+- Mỗi node trong cụm k8s sẽ được gán 1 `CIDR block` (1 dải địa chỉ IP) để cấp cho các pods, vì vậy mỗi pod có 1 IP duy nhất và không bị conflict với các pods trên 1 node khác trong cụm k8s.
 
-- Phần tiếp theo, mình sẽ nói về một số kiểu network được sử dụng trong k8s: `flannel`, `calico`, `weave`.
+- Phần tiếp theo, mình sẽ nói về một số kiểu network được sử dụng trong k8s: `flannel`, `calico`
 
 ### 5. Flannel - overlay networks
 
@@ -74,7 +74,7 @@
   
     ![alt](../images/packetvxlan.png)
 	
-	* 3c.Gói tin này được đóng gói được gửi qua eth0.
+	* 3c.Gói tin này được đóng gói và gửi qua eth0.
 	
 	* 4.Gói tin rời khỏi node với sourceIP là IP node1 và destIP là IP node2.
 	
@@ -90,34 +90,175 @@
 	
 	* 8.Gói tin sẽ đi qua `vethyyy` và được gửi tới pod4.
 
-- Với Flannel sử dụng công nghệ `vxlan`: nhanh nhưng không có mã hóa giữa các node, nó phù hợp với mô hình private.
+- Một số lưu ý khi sử dụng Flannel:
 	
-- Flannel không cung cấp triển khai NetworkPolicy resource. Vậy NetworkPolicy là gì ?
+	* Flannel sử dụng công nghệ `vxlan`: không có mã hóa giữa các node.
+	
+	* Flannel không hỗ trợ NetworkPolicy resource trong k8s.
+
+### 6. Calico
+
+#### Kiến trúc, các thành phần:
+
+  ![alt](../images/calico_architecture.png)
+
+- Calico được tạo thành từ các thành phần sau:
+
+	* Felix
+	
+	* Orchestrator plugin
+	
+	* Etcd
+
+	* BIRD (BGP client)
+	
+	* BGP Route Relector
+	
+##### Felix:
+
+- Felix là 1 daemon, chạy trên tất cả các node trong cụm k8s. Felix chịu trách nhiệm: **Interface management, Route programming, ACL programming, State reporting.**
+
+	- **Interface management**: Felix 
+
+	- **Route programming**: Felix lập trình tạo ra các routes trên mỗi node trong cụm k8s. Điều này sẽ đảm bảo định tuyến được đúng đường đi giữa các pods trong 1 cụm k8s.
+
+	- **ACL programming**: Felix cũng chịu trách nhiệm tạo ra các ACL (Access list control). Các ACL này được sử dụng để đảm bảo rằng chỉ có thể gửi các traffic hợp lệ giữa các endpoints và đảm bảo rằng các endpoints này không có khả năng phá vỡ các biện pháp bảo mật của `Calico`.
+
+	- **State reporting**: Felix cung cấp dữ liệu về tình trạng của mạng. Cụ thể, nó sẽ report các lỗi và vấn đề về mạng. Dữ liệu này được ghi vào `etcd`.
+
+##### Orchestrator plugin:
+
+- Với mỗi 1 nền tảng điều phối riêng (ví dụ: Openstack, Kubernetes), sẽ có plugin riêng. Mục đích của plugin này là liên kết chặt chẽ giữa `Calico` với bộ điều phối, cho phép người dùng quản lí mạng `Calico` giống như họ đang quản lí các công cụ mạng được tích hợp sẵn trong bộ điều phối. Với mỗi 1 orchestation sẽ có 1 bộ API riêng.
+
+##### Etcd:
+
+- Thành phần được sử dụng để lưu trữ dữ liệu của `Calico`.
+
+##### BGP client (BIRD):
+
+- Giống như `Felix`, Calico triển khai `BGP client` trên tất cả các node trong cụm k8s. Vai trò của `BIRD` là đọc các trạng thái định tuyến từ `Felix` và phân phối nó tới trung tâm dữ liệu.
+
+- Khi `Felix` thực hiện insert các routes vào FIB của kernel Linux, `BIRD` sẽ chọn chúng và phân phối chúng đến các node khác trong cụm k8s. Điều này đảm bảo rằng traffic được định tuyến 1 cách hiệu quả, chính xác giữa các node trong cụm k8s.
+
+##### BGP route reflector (BIRD):
+
+- Đối với các mô hình triển khai k8s lớn, BGP đơn giản có thể trở thành 1 yếu tố hạn chế vì nó yêu cầu mọi BGP client phải được kết nối với mọi BGP client khác trong mạng mesh topology.
+
+  ![alt](../images/mesh_peering.png)
+  
+- Điều này đòi hỏi số lượng kết nối ngày càng tăng nhanh chóng trở nên khó khăn để duy trì. Vì lí do này, trong các mô hình triển khai lớn, Calico sẽ triển khai `BGP route reflector`. Thành phần này, thường được sử dụng trong Internet, hoạt động như 1 điểm trung tâm mà các BGP client kết nối đến, ngăn các BGP client không cần phải nói chuyện trực tiếp với các BGP client khác trong cụm.
+
+  ![alt](../images/BGP_reflection.png)
+  
+- BGP route reflector có nhiệm vụ **phân phối tuyến đường tập trung**:
+
+  ![alt](../images/BGP_reflection2.png)
+  
+- Khi `BGP client` quảng cáo các tuyến đường từ FIB của nó đến `BGP route reflector`, `BGP route reflector` sẽ quảnq cáo các tuyến đó ra các node khác trong quá trình triển khai.
+
+#### Cơ chế kết nối giữa các pods:
+
+- Calico hỗ trợ đóng gói (encapsulation) để có thể gửi traffic giữa các pods mà không yêu cầu hạ tầng mạng bên dưới phải biết về địa chỉ IP của các pods.
+
+- Calico hỗ trợ 2 loại đóng gói: `VXLAN` và `IP-in-IP`. VXLAN được hỗ trợ trong 1 số môi trường không có `IP in IP` (ví dụ: Azure). Tuy nhiên, VXLAN có hạn chế hơn chút về mặt hiệu năng, bởi vì gói tin `VXLAN` có header lớn hơn so với `IP in IP`. Sau đây mình sẽ giải thích rõ hơn về điều này:
+
+- `MTU` là 1 thuộc tính global của path network giữa các endpoints, nên MTU workloads cần được đặt thành MTU tối thiểu của bất kỳ path network nào mà gói tin có thể đi qua.
+
+- Nếu bạn đang sử dụng overlays như `IP-in-IP` hoặc `VXLAN`, overlay header bổ sung được sử dụng bởi các giao thức đó sẽ giảm MTU tối thiểu theo kích thước của header. `IP-in-IP` sử dụng header 20 byte, VXLAN sử dụng header 50 byte. Vì thế:
+	
+	* Nếu sử dụng `VXLAN` ở bất cứ đâu trong pod network, bạn nên chọn 1 MTU là MTU mạng trừ 50.
+		
+	* Nếu sử dụng `IP-in-IP`, bạn nên chọn 1 MTU là MTU mạng trừ 20.
+		
+- Bảng kích thước MTU phổ biến:
+
+  ![alt](../images/tables-mtu.png)
+  
+- MTU mặc định cho workload interfaces là 1500, đây là để phù hợp với kích thước MTU mạng phổ biến nhất. MTU mặc định cho `IP-in-IP` tunnel là 1440 để phù hợp với giá trị cần thiết trong GCE. Tương tự, mặc định cho VXLAN là 1410.
+
+- Mô hình kết nối:
+  
+  ![alt](../images/pod_calico_connect.png)
+  
+- 
+
+	* Configure IP in IP encapsulation for only cross subnet traffic
+	
+    * Configure IP in IP encapsulation for all inter workload traffic
+	
+    * Configure VXLAN encapsulation for all inter workload traffic
+
+##### Configure IP in IP encapsulation for only cross subnet traffic
+
+  ```
+  apiVersion: projectcalico.org/v3
+  kind: IPPool
+  metadata:
+    name: ippool-cross-subnet-1
+  spec:
+    cidr: 192.168.0.0/16
+    ipipMode: CrossSubnet
+    natOutgoing: true
+  ```
+
+##### Configure IP in IP encapsulation for all inter workload traffic
+
+- Đây là cấu hình mặc định khi sử dụng `Calico`
+
+  ```
+  apiVersion: projectcalico.org/v3
+  kind: IPPool
+  metadata:
+    name: ippool-ipip-1
+  spec:
+    cidr: 192.168.0.0/16
+    ipipMode: Always
+    natOutgoing: true
+  ```
+- 
 
 ### 6. NetworkPolicy trong k8s
 
-- Mặc định trong 1 cụm cluster không sử dụng NetworkPolicy, tất cả các Pod sẽ nói chuyện được với nhau. Ví dụ:
+- Mặc định trong 1 cụm k8s, tất cả các Pod sẽ nói chuyện được với nhau. Để tăng tính bảo mật cho các ứng dụng, trong k8s sử dụng resource `NetworkPolicy`.
+
+- `NetworkPolicy` cho phép bảo mật các ứng dụng bằng cách cung cấp các Policy để kiểm soát các kết nối vào/ra giữa các pods trong k8s. Tuy nhiên, bản thân k8s không có khả năng thực thi các network policy này. Để thực thi các network policy, ta cần phải sử dụng 1 network plugin có khả năng thực thi các network policy này (Calico, Cannal).
+
+- Trước khi cấu hình NetworkPolicy:
 
   ![alt](../images/networkpolicy1.png)
+
+- Sau khi cấu hình NetworkPolicy:
   
-- Trước khi cấu hình Networkpolicy, các pod web sẽ nói chuyện được với các db pod. Để tăng tính bảo mật, mình sẽ cấu hình 1 NetworkPolicy chỉ cho phép các pod backend mới có thể kết nối được đến pod database, các pod web sẽ không được phép kết nối tới các pod db.
+  ![alt](../images/networkpolicy2.png)
+
+- **Ví dụ về NetworkPolicy:
+
+- Các pod:
+  
+  ```
+  kubectl get pod -o wide
+  NAME                        READY   STATUS    RESTARTS   AGE     IP               NODE      NOMINATED NODE   READINESS GATES
+  backend-6db5cdbb4b-b9tdm    1/1     Running   0          2m36s   192.168.189.77   worker2   <none>           <none>
+  db-5b54c87fdb-v6rl2         1/1     Running   0          3m36s   192.168.189.75   worker2   <none>           <none>
+  frontend-5575ff85dd-76frq   1/1     Running   0          2m42s   192.168.189.76   worker2   <none>           <none>
+  frontend-5575ff85dd-gz467   1/1     Running   0          2m42s   192.168.182.8    worker3   <none>           <none>
+  frontend-5575ff85dd-hd9rf   1/1     Running   0          2m42s   192.168.182.7    worker3   <none>           <none>
+  ```
+  
+- Trước khi cấu hình Networkpolicy, các pod web(frontend) sẽ nói chuyện được với các db pod. Thực hiện test trên pod `frontend-5575ff85dd-76frq` ping đến pod `db-5b54c87fdb-v6rl2`:
+  
+  ```
+  root@frontend-5575ff85dd-76frq:/# ping 192.168.189.75 -c 2
+  PING 192.168.189.75 (192.168.189.75) 56(84) bytes of data.
+  64 bytes from 192.168.189.75: icmp_seq=1 ttl=63 time=0.156 ms
+  64 bytes from 192.168.189.75: icmp_seq=2 ttl=63 time=0.129 ms
+  ```
+  
+- Sau đây, mình sẽ cấu hình 1 NetworkPolicy chỉ cho phép các pod backend kết nối được đến pod database, các pod web(frontend) sẽ không được phép kết nối tới các pod db.
 
   ```
-  kind: NetworkPolicy
-  apiVersion: networking.k8s.io/v1
-  metadata:
-    name: backend-access-ingress
-  spec:
-    podSelector:
-      matchLabels:
-        app: myapp
-        role: backend
-    ingress:
-    - from:
-      - podSelector:
-          matchLabels:
-            app: myapp
-            role: web
+  vim networkpolicy.yaml
+  
   kind: NetworkPolicy
   apiVersion: networking.k8s.io/v1
   metadata:
@@ -125,25 +266,32 @@
   spec:
     podSelector:
       matchLabels:
-        app: myapp
         role: db
   ingress:
     - from:
       - podSelector:
           matchLabels:
-            app: myapp
             role: backend
   ```
+- *NetworkPolicy trên chỉ ra rằng sẽ chỉ cho phép các kết nối từ các pods có label là `role:backend` vào các pods có label là `role:db`.
 
-- Sau khi config NetworkPolicy: 
+- Apply networkPolicy: 
+
+  ```
+  kubectl apply -f networkpolicy.yaml
+  networkpolicy.networking.k8s.io/backend-access-ingress created
+  networkpolicy.networking.k8s.io/db-access-ingress created
+
+- Sau khi config NetworkPolicy trên, ta thực hiện test, vẫn ở trên pod `frontend-5575ff85dd-76frq` ping đến pod `db-5b54c87fdb-v6rl2`:
+
+  ```
+  root@frontend-5575ff85dd-76frq:/# ping 192.168.189.75 -c 2 -t 3
+  PING 192.168.189.75 (192.168.189.75) 56(84) bytes of data.
+  --- 192.168.189.75 ping statistics ---
+  2 packets transmitted, 0 received, 100% packet loss, time 1014ms
+  ```
   
-  ![alt](../images/networkpolicy2.png)
   
 
-  
-  
-  
 
 
-  
-  
