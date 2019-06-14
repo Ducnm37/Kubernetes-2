@@ -261,7 +261,7 @@
   frontend-5575ff85dd-hd9rf   1/1     Running   0          2m42s   192.168.182.7    worker3   <none>           <none>
   ```
   
-- Trước khi cấu hình Networkpolicy, các pod web(frontend) sẽ nói chuyện được với các db pod. Thực hiện test trên pod `frontend-5575ff85dd-76frq` ping đến pod `db-5b54c87fdb-v6rl2`:
+- Trước khi cấu hình Networkpolicy, các pod web(frontend) sẽ nói chuyện được với các db pod. Thực hiện trên pod `frontend-5575ff85dd-76frq` ping đến pod `db-5b54c87fdb-v6rl2`:
   
   ```
   root@frontend-5575ff85dd-76frq:/# ping 192.168.189.75 -c 2
@@ -270,7 +270,7 @@
   64 bytes from 192.168.189.75: icmp_seq=2 ttl=63 time=0.129 ms
   ```
   
-- Sau đây, mình sẽ cấu hình 1 NetworkPolicy chỉ cho phép các pod backend kết nối được đến pod database, các pod web(frontend) sẽ không được phép kết nối tới các pod db.
+- Cấu hình 1 NetworkPolicy chỉ cho phép các pod backend kết nối đến pod database, các pod web(frontend) sẽ không được phép kết nối tới các pod db.
 
   ```
   vim networkpolicy.yaml
@@ -289,6 +289,7 @@
           matchLabels:
             role: backend
   ```
+
 - *NetworkPolicy trên chỉ ra rằng sẽ chỉ cho phép các kết nối từ các pods có label là `role:backend` vào các pods có label là `role:db`.
 
 - Apply networkPolicy: 
