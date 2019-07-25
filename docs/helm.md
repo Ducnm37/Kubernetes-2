@@ -1,5 +1,18 @@
 ## Tìm hiểu về Helm
 
+### Nội dung
+
+	- Helm là gì?
+	
+	- Các chức năng của Helm
+	
+	- Khái niệm và kiến trúc
+	
+	- Cài đặt Helm
+	
+	- Tài liệu tham khảo
+	
+
 ### 1. Helm là gì?
 
 - Deploy một ứng dụng lên Kubernetes cluster - đặc biệt là các ứng dụng phức tạp - đòi hỏi việc tạo một loạt các resource của ứng dụng đó, ví dụ như Pod, Service, Deployment, ReplicaSet ... . Mỗi resource lại yêu cầu phải viết một file YAML chi tiết cho nó để deploy. Điều đó dẫn đến các thao tác CRUD(Create, Read, Update, Delete) trên một loạt các resource này trở nên phức tạp. Để giải quyết vấn đề này, Helm được ra đời.
@@ -62,7 +75,7 @@
 	
 - Helm Charts: chart repository chính thức của Helm chứa hầu hết các chart được tạo sẵn dành cho các project open-source phổ biến. Repo: `https://github.com/helm/charts`
 	
-4. Cài đặt Helm
+### 4. Cài đặt Helm
 
   ```
   wget https://get.helm.sh/helm-v2.14.2-linux-amd64.tar.gz
