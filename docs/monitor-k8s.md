@@ -16,17 +16,13 @@
 
 ### 1. Giới thiệu
 
-- Trong phần này, mình sẽ giới thiệu đến các bạn bộ công cụ Prometheus - Grafana để monitoring cụm k8s.
-
-- Thời gian gần đây thì Coreos đã cho ra mắt Prometheus-Operator giúp cho việc set up Prometeus và Grafana trên K8s trở nên dễ dàng hơn rất nhiều.
+- Trong phần này, mình sẽ giới thiệu đến các bạn bộ công cụ Prometheus - Grafana để monitoring cụm k8s. Thời gian gần đây thì Coreos đã cho ra mắt Prometheus-Operator giúp cho việc set up Prometeus và Grafana trên K8s trở nên dễ dàng hơn rất nhiều.
 
 ### 2. Prometheus
 
 #### Khái niệm 
 
-- Prometheus là một bộ công cụ giám sát và cảnh báo hệ thống mã nguồn mở ban đầu được xây dựng bởi công ty SoundCloud.
-
-- Prometheus bây giờ đã trở thành một dự án mã nguồn mở độc lập. Prometheus đã tham gia vào tổ chức Cloud Native Computing Foundation vào năm 2016 với tư cách là dự án được ưu tiên phát triển thứ2 sau Kubernetes(k8s).
+- Prometheus là một bộ công cụ giám sát và cảnh báo hệ thống mã nguồn mở ban đầu được xây dựng bởi công ty SoundCloud. Prometheus bây giờ đã trở thành một dự án mã nguồn mở độc lập. Prometheus đã tham gia vào tổ chức Cloud Native Computing Foundation vào năm 2016 với tư cách là dự án được ưu tiên phát triển thứ2 sau Kubernetes(k8s).
 
 #### Một số tính năng của Prometheus
 
