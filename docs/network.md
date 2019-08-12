@@ -1,10 +1,18 @@
-## 1. Giới thiệu:
+### 1. Giới thiệu:
 
-- Một trong những phần phức tạp và quan trọng nhất khi tìm hiểu về k8s là phần Network. Trong phần này, tôi sẽ giới thiệu về network của 1 pod, cách thức kết nối giữa các pods trong 1 cụm cluster k8s.
+- Một trong những phần phức tạp và quan trọng nhất khi tìm hiểu về k8s là phần Network. Để hiểu rõ về network trong k8s, ta cần tập trung vào 4 phần:
 
-## 2. Network on Pod
+	* Network on Pod
+	
+	* Pod-to-Pod communications
+	
+	* Pod-to-Service communications
+	
+	* External-to-Service communications
 
-- Về cốt lõi, Network trong k8s có 1 triết lí thiết kế cơ bản quan trọng là: **Mỗi Pod có 1 IP**.
+### 2. Network on Pod
+
+- Trong k8s, mỗi Pod có 1 IP.
 
 - IP của 1 pod được chia sẻ bởi tất cả các container trong Pod này, và mặc định nó có thể kết nối từ tất cả các Pod khác trong 1 cụm k8s. 
 
@@ -12,13 +20,13 @@
   
   ![alt](../images/containerpause.png)
 
-- Chúng được gọi là các `sandbox containers`, có 1 nhiệm vụ duy nhất là lưu giữ `network namespace` (netns) được chia sẻ bởi tất cả các container trong 1 pod. Với cơ chế này, trong 1 Pod khi 1 container chết hoặc 1 container mới được tạo thì IP Pod sẽ không bị thay đổi.
+- Chúng được gọi là các `sandbox containers`, có nhiệm vụ lưu giữ `network namespace` (netns) được chia sẻ bởi tất cả các container trong 1 pod. Với cơ chế này, trong 1 Pod khi 1 container chết hoặc 1 container mới được tạo thì IP Pod sẽ không bị thay đổi.
 
-## 3. Network Pod to Pod  
+### 3. Pod-to-Pod communications
 
-- Trong k8s, để kết nối giữa các pods, ta cần sử dụng 1 network plugin ngoài như Flannel, Calico, Cannal, Weave... Ở trong bài này, mình sẽ nói về sử dụng `Flannel` và `Calico` để kết nối giữa các pods trong k8s.
+- Trong k8s, để kết nối giữa các pods, ta cần sử dụng 1 network plugin ngoài như Flannel, Calico, Cannal, Weave... Ở trong bài này, tôi sẽ nói về sử dụng `Flannel` và `Calico` để kết nối giữa các pods trong k8s.
 
-## 3.1. Flannel
+### 3.1. Flannel
 
 ### Khái niệm: 
 
@@ -26,7 +34,7 @@
 
 - Flannel chạy 1 tiến trình agent có tên là flanneld trên tất cả các node trong cụm k8s. Tiến trình này chịu trách nhiệm phân bổ `subnet lease` trên mỗi node.
 
-- Flannel sử dụng Kubernetes API hoặc gọi trực tiếp vào etcd để lưu trữ cấu hình mạng, subnet được phân bổ như nào và bất kì dữ liệu phụ trợ nào khác ( như IP public của host). 
+- Flannel sẽ lưu tất cả các thông tin vào etcd: lưu trữ cấu hình mạng, subnet được phân bổ như nào và bất kì dữ liệu phụ trợ nào khác ( như IP public của host).
 
 ### Kết nối giữa các Pod trên 1 node
 
@@ -34,13 +42,13 @@
  
 - Trên mỗi node trong cụm k8s (chạy hệ điều hành linux) sẽ có 1 `root network namespace` ( root netns). Interface chính `eth0` nằm trong `root network namespace` này.
 
-- Tương tự, mỗi pod sẽ có netns riêng, với 1 virtual ethernet (veth) kết nối nó tới `root netns`. Về cơ bản, `veth` là 1 đường ống với 2 đầu, 1 đầu được gắn với root netns và đầu còn lại gắn với pod netns.
+- Tương tự, mỗi pod sẽ có netns riêng, với 1 virtual ethernet (veth) kết nối nó tới `root netns`. Bạn có thể hiểu `veth` là 1 đường ống để kết nối với 2 đầu, 1 đầu được gắn với root netns và đầu còn lại gắn với pod netns.
 
   ![alt](../images/podnetns1.png)  
 
 - Bạn có thể liệt kê tất cả các network interface trên node với lệnh `ifconfig` hoặc `ip a`.
 
-- Trong k8s, sẽ sử dụng 1 bridge `cbr0` để các pod trên 1 node nói chuyện với nhau.
+- Với plugin network Flannel, sẽ sử dụng 1 bridge `cni0` để các pod trên 1 node nói chuyện với nhau.
 
   ![alt](../images/podnetns2.png)
   
@@ -60,15 +68,9 @@
   
 ### Kết nối giữa các pod trên các node khác nhau
 
-- Như đề cập ở trên, các pod cũng cần kết nối được trên tất cả các node trong 1 cụm k8s. Để làm được điều này, có thể sử dụng L2 (ARP across nodes), L3 (IP routing giữa các node) hoặc overlay networks. Một số plugins network được sử dụng trong k8s: flannel, calico, weave, cannal...
-
-- Mỗi node trong cụm k8s sẽ được gán 1 `CIDR block` (1 dải địa chỉ IP) để cấp cho các pods, vì vậy mỗi pod có 1 IP duy nhất và không bị conflict với các pods trên 1 node khác trong cụm k8s.
-
-- Phần tiếp theo, mình sẽ nói về một số kiểu network được sử dụng trong k8s: `flannel`, `calico`
+- Mỗi node trong cụm k8s sẽ được gán 1 `CIDR block` (1 dải địa chỉ IP) để cấp cho các pods, vì vậy mỗi pod có 1 IP duy nhất và không bị conflict với các pods trên tất cả các node khác trong cụm k8s.
 
 ### Traffic flows
-
-- Traffic flows trong `flannel` sử dụng backend `VXLAN`:
 
   ![alt](../images/flannel.gif)
 
@@ -80,7 +82,7 @@
   
   	* 3a.Vì không pod nào trên node này có địa chỉ IP cho `pod4`, nên bridge `cbr0` gửi nó tới `flannel0`. Vì bảng định tuyến của node được cấu hình với `flannel0` làm mục tiêu cho range IP pod. Các thông tin cấu hình này được lưu ở `etcd`.
   
-  	* 3b.Khi tiến trình `flanneld` daemon nói chuyện với `kubernetes apiserver` hoặc `etcd`, nó sẽ biết về tất cả các IP của pod và các dải IP của pod đang nằm trên node nào. Vì vậy, `flannel` sẽ ánh xạ các IP pod với IP của các node. `flannel0` lấy gói tin này và đóng gói vào trong gói UDP với các header bổ sung thay đổi IP nguồn và IP đích đến các node tương ứng và gửi nó đến 1 port đặc biệt `vxlan` (thường là 8472).
+  	* 3b.Tiến trình `flanneld` daemon đọc thông tin trong `etcd`, nó sẽ biết về tất cả các IP của pod và các dải IP của pod đang nằm trên node nào. Vì vậy, `flannel` sẽ ánh xạ các IP pod với IP của các node. `flannel0` lấy gói tin này và đóng gói vào trong gói UDP với các header bổ sung thay đổi IP nguồn và IP đích đến các node tương ứng và gửi nó đến 1 port đặc biệt `vxlan` (thường là 8472).
   
     ![alt](../images/packetvxlan.png)
 	
@@ -96,7 +98,7 @@
 	
 	* 6c.`Vì IP forwarding được enabled`, kernel sẽ chuyển tiếp gói tin tới `cbr0`.
 	
-	* 7.Bridge `cbr0` sẽ lấy gói tin và thực hiện 1 request ARP và phát hiện ra răng IP này thuộc về `vethyyy`.
+	* 7.Bridge `cbr0` sẽ lấy gói tin và thực hiện 1 request ARP và phát hiện ra rằng IP này thuộc về `vethyyy`.
 	
 	* 8.Gói tin sẽ đi qua `vethyyy` và được gửi tới pod4.
 
@@ -106,7 +108,7 @@
 	
 	* Flannel không hỗ trợ NetworkPolicy trong k8s.
 
-## 3.2. Calico
+### 3.2. Calico
 
 ### Khái niệm:
 
@@ -144,7 +146,7 @@
 
 #### Orchestrator plugin:
 
-- Với mỗi 1 nền tảng điều phối riêng (ví dụ: Openstack, Kubernetes), sẽ có plugin riêng. Mục đích của plugin này là liên kết chặt chẽ giữa `Calico` với bộ điều phối, cho phép người dùng quản lí mạng `Calico` giống như họ đang quản lí các công cụ mạng được tích hợp sẵn trong bộ điều phối. Với mỗi 1 orchestation sẽ có 1 bộ API riêng.
+- Với mỗi 1 nền tảng điều phối riêng (ví dụ: Openstack, Kubernetes), sẽ có plugin riêng. Mục đích của plugin này là liên kết giữa `Calico` với bộ điều phối, cho phép người dùng quản lí mạng `Calico` giống như họ đang quản lí các công cụ mạng được tích hợp sẵn trong bộ điều phối. Với mỗi 1 orchestation sẽ có 1 bộ API riêng.
 
 #### Etcd:
 
@@ -176,7 +178,7 @@
 
 - Calico hỗ trợ đóng gói (encapsulation) để có thể gửi traffic giữa các pods mà không yêu cầu hạ tầng mạng bên dưới phải biết về địa chỉ IP của các pods.
 
-- Calico hỗ trợ 2 loại đóng gói: `VXLAN` và `IP-in-IP`. VXLAN được hỗ trợ trong 1 số môi trường không có `IP in IP` (ví dụ: Azure). Tuy nhiên, VXLAN có hạn chế hơn chút về mặt hiệu năng, bởi vì gói tin `VXLAN` có header lớn hơn so với `IP in IP`. Sau đây mình sẽ giải thích rõ hơn về điều này:
+- Calico hỗ trợ 2 loại đóng gói: `VXLAN` và `IP-in-IP`. VXLAN được hỗ trợ trong 1 số môi trường không có `IP in IP` (ví dụ: Azure). Tuy nhiên, VXLAN có hạn chế hơn chút về mặt hiệu năng, bởi vì gói tin `VXLAN` có header lớn hơn so với `IP in IP`. Sau đây tôi sẽ giải thích rõ hơn về điều này:
 
 - `MTU` là 1 thuộc tính global của path network giữa các endpoints, nên MTU workloads cần được đặt thành MTU tối thiểu của bất kỳ path network nào mà gói tin có thể đi qua.
 
@@ -196,8 +198,7 @@
   
   ![alt](../images/pod_calico_connect.png)
   
-- 
-
+  
 	* Configure IP in IP encapsulation for only cross subnet traffic
 	
     * Configure IP in IP encapsulation for all inter workload traffic
@@ -231,13 +232,12 @@
     ipipMode: Always
     natOutgoing: true
   ```
-- 
 
 ### NetworkPolicy trong k8s
 
 - Mặc định trong 1 cụm k8s, tất cả các Pod sẽ nói chuyện được với nhau. Để tăng tính bảo mật cho các ứng dụng, trong k8s sử dụng resource `NetworkPolicy`.
 
-- `NetworkPolicy` cho phép bảo mật các ứng dụng bằng cách cung cấp các Policy để kiểm soát các kết nối vào/ra giữa các pods trong k8s. Tuy nhiên, bản thân k8s không có khả năng thực thi các network policy này. Để thực thi các network policy, ta cần phải sử dụng 1 network plugin có khả năng thực thi các network policy này (Calico, Cannal).
+- `NetworkPolicy` cho phép bảo mật các ứng dụng bằng cách cung cấp các Policy để kiểm soát các kết nối vào/ra giữa các pods trong k8s. Tuy nhiên, bản thân k8s không có khả năng thực thi các network policy này. Để thực thi các network policy, ta cần phải sử dụng 1 network plugin có khả năng thực thi các network policy này (Calico, Cannal...).
 
 - Trước khi cấu hình NetworkPolicy:
 
@@ -308,7 +308,29 @@
   2 packets transmitted, 0 received, 100% packet loss, time 1014ms
   ```
   
-  
+### 4. Pod-to-Service communications.
+
+- Để kết nối các app trong 1 cụm hoặc với các app ngoài cụm, k8s sử dụng `service`.
+
+- Pod trong k8s không có sự đảm bảo về địa chỉ IP cố định, giả sử 1 pod gặp sự cố và được khởi tạo lại, pod mới này có thể sẽ được gán cho 1 IP khác -> Service được ra đời
+    
+- Service được dùng để nhóm lại một hoặc nhiều Pod bằng Label Selector.
+
+- Có thể hiểu thì Service giống như domain, còn Pod chạy ứng dụng chính là server và việc của domain là trỏ đến IP của server đang chạy website. Nhưng tuyệt vời hơn, thay vì một bản ghi DNS của domain chỉ trỏ được đến 1 IP thì service có thể trỏ đến nhiều pods cùng chạy ứng dụng, và khi đó Service đóng vai trò là một Internal LoadBalancer.
+
+- Service gồm có 3 kiểu:
+
+	* ClusterIP
+	
+	* NodePort
+	
+	* LoadBalancer
+
+- Phần này, mình sẽ giới thiệu về kiểu ClusterIP trong service.
+
+
+	
+
 
 
 
