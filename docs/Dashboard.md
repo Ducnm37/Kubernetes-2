@@ -363,6 +363,6 @@ token:      ahihi_eyJhbGciOiJSUzI1NiIsImtpZCI6IiJ9.eyJpc3MiOiJrdWJlcm5ldGVzL3Nlc
 
 - https://github.com/kubernetes/dashboard/wiki/Installation
 
-- https://github.com/kubernetes/dashboard/wiki/Creating-sample-user
+- https://github.com/kubernetes/dashboard/blob/master/README.md
 
 - https://brookbach.com/2018/10/29/Heapster-on-Kubernetes-1.11.3.html
