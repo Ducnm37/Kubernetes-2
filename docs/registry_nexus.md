@@ -19,7 +19,7 @@ vim /etc/hosts
 172.16.68.213	registry.thangtq.com
 ```
 
-### Thực hiện trên node master. Tạo thư mục chứa data của nexus-repo:
+#### Thực hiện trên node master. Tạo thư mục chứa data của nexus-repo:
 
 ```
 mkdir -p /data/nexus
