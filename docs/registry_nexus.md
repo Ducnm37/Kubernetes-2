@@ -19,6 +19,13 @@ vim /etc/hosts
 172.16.68.213	registry.thangtq.com
 ```
 
+### Thực hiện trên node master. Tạo thư mục chứa data của nexus-repo:
+
+```
+mkdir -p /data/nexus
+chown -R 200: /data/nexus
+```
+
 #### Tạo ssl certificate cho nginx
 
 - Thực hiện trên node registry
@@ -26,8 +33,8 @@ vim /etc/hosts
 - B1: Tao thu muc chua cert file
 
 ```
-mkdir -p /data/nginx/certs
-cd /data/nginx/certs
+mkdir -p /data/nginx/cert
+cd /data/nginx/cert
 ```
 
 - B2: Tao CA (Certificate Authority)
