@@ -1,4 +1,4 @@
-## Monitoring Kubernetes Cluster với Prometheus-Grafana 
+### Monitoring Kubernetes Cluster với Prometheus-Grafana 
 
 ### Nội dung
 
@@ -30,15 +30,9 @@
     
 - Ngôn ngữ truy vấn linh hoạt.
     
-- Hỗ trợ nhiều biểu đồ.
- 
-- Dễ dàng cấu hình cảnh báo
-    
-- Chỉ cần 1 máy chủ là có thể hoạt động được.
+- Cấu hình cảnh báo
    
 - Hỗ trợ Push các time-series thông quan 1 gateway trung gian.
-    
-- Prometheus sử dụng Alertmanager để lấy và gửi cảnh báo đi.
     
 - Prometheus cung cấp giao diện đơn giản đề tạo truy vấn và hiển thị biểu đồ.
     
@@ -83,15 +77,48 @@
 
 - Cơ bản thì Grafana là một dashboard app cho phép ta tạo các dashboard từ các nguồn dữ liệu time-series.
 
-### 5. Cài đặt
+### 5. Helm
+
+- Deploy một ứng dụng lên Kubernetes cluster - đặc biệt là các ứng dụng phức tạp - đòi hỏi việc tạo một loạt các resource của ứng dụng đó, ví dụ như Pod, Service, Deployment, ReplicaSet ... . Mỗi resource lại yêu cầu phải viết một file YAML chi tiết cho nó để deploy. Điều đó dẫn đến các thao tác CRUD(Create, Read, Update, Delete) trên một loạt các resource này trở nên phức tạp. Để giải quyết vấn đề này, Helm được ra đời.
+
+- Như Ubuntu có apt, Centos có yum, tương tự Helm đóng vai trò là một Package Manager cho Kubernetes. Việc cài đặt các resource Kubernetes sẽ được thông qua và quản lý trên Helm. 
+
+  ![alt](../images/helm.png)
+  
+- Hiện tại, Helm là project chính thức của hệ sinh thái Kubernetes và được quản lý bởi Cloud Native Computing Foundation.
+
+- Helm cung cấp một số tính năng cơ bản mà một package manager cần phải có như sau:
+
+	* Cài đặt các resource và tự động cài đặt các resource phụ thuộc.
+    
+	* Update và rollback các resource đã release.
+    
+	* Cấu hình.
+    
+	* Pull các package từ các repository.
+
+### 6. Cài đặt Prometheus-Grafana với Helm
 
 #### Yêu cầu:
 	
-	* Kubernetes cluster đang chạy
-	
-	* Helm đã được cài đặt 
+- Kubernetes cluster đang chạy:
 
-#### Cài đặt:
+- Server NFS: 172.16.68.214 share thư mục /data/k8s/prometheus.
+	
+- Install nfs-common trên tất cả các worker node trong k8s.
+	
+#### Các bước thực hiện:
+
+- Các bước thực hiện trên node master
+
+- Cài đặt Helm:
+
+  ```
+  wget https://get.helm.sh/helm-v2.14.2-linux-amd64.tar.gz
+  tar -zxvf helm-v2.14.2-linux-amd64.tar.gz 
+  cd linux-amd64/
+  cp helm /usr/local/bin/
+  ```
 
 - Tạo file rbac-config.yaml
 
@@ -133,11 +160,69 @@
   ```
   helm repo update
   ```
+  
+- Tạo file storageclass-nfs-prometheus.yaml
+
+  ```
+  replicaCount: 1
+  nfs:
+    server: 172.16.68.214
+    path: /data/k8s/prometheus
+    mountOptions:
+  storageClass:
+    create: true
+    archiveOnDelete: false
+    name: nfs-prometheus
+    allowVolumeExpansion: true
+  ```
+  
+- Sử dụng Helm để tạo storageclass-nfs-prometheus
+
+  ```
+  helm install --name nfs-prometheus -f storageclass-nfs-prometheus.yaml stable/nfs-client-provisioner --namespace monitoring
+  ```
+
+- Check storage class vừa được khởi tạo
+
+  ```
+  kubectl get storageclass
+  NAME             PROVISIONER                                           AGE
+  nfs-prometheus   cluster.local/nfs-prometheus-nfs-client-provisioner   4h12m
+  ```
+
+- Tạo file custom-values.yaml để edit prometheus và grafana
+
+```
+# Define Prometheus
+prometheus:
+  prometheusSpec:
+    retention: 30d
+    resources:
+      limits:
+        cpu: 400m
+        memory: 1Gi
+      requests:
+        cpu: 400m
+        memory: 1Gi
+    storageSpec:
+      volumeClaimTemplate:
+        spec:
+          accessModes: ["ReadWriteOnce"]
+          storageClassName: nfs-prometheus
+          resources:
+            requests:
+              storage: 10Gi
+			  
+# Define Grafana
+grafana:
+  # Set password for Grafana admin user
+  adminPassword: ahihi
+```
 
 - Install prometheus-operator với helm
 
   ```
-  helm install stable/prometheus-operator --name prometheus-operator --namespace monitoring
+  helm install --name prometheus-operator -f custom-values.yaml stable/prometheus-operator --namespace monitoring
   ```
 
 - Kiểm tra việc cài đặt:
@@ -155,7 +240,7 @@
   prometheus-prometheus-operator-prometheus-0               3/3     Running   1          36h
   ```
   
-- Run Prometheus dashboard: Để khởi chạy Prometheus dashboard chúng ta sẽ tạo 1 service type NodePort. Tạo service
+- Run Prometheus dashboard: Để khởi chạy Prometheus dashboard, ta sẽ tạo 1 service type NodePort. Tạo service
   
   ```
   # create file prom-service.yml
@@ -205,13 +290,7 @@
   service "grafana-service" created
   ```
   
-- Config password admin grafana dashboard:
-
-  ```
-  kubectl exec -it -n monitoring prometheus-operator-grafana-697d578598-b5nm6 -c grafana /bin/bash
-  grafana-cli admin reset-admin-password "ahihi"
-  ```
-- Truy cập http://{grafana IP}:30300/
+- Truy cập http://{grafana IP}:30300/ với user/pass: admin/ahihi
 
   ![alt](../images/grafana_dashboard.png)
   
@@ -220,6 +299,8 @@
 - https://prometheus.io/
 
 - https://github.com/hocchudong/ghichep-prometheus
+
+- https://blog.vietnamlab.vn/2019/01/31/helm-package-manager-cho-kuber/
 
 - https://coreos.com/operators/prometheus/docs/latest/user-guides/getting-started.html
 

@@ -90,22 +90,31 @@ spec:
         ports:
         - containerPort: 80
         resources:
-          requests: 
+          limits: 
             cpu: "200m"
+			memory: "200Mi"
 ---
-apiVersion: autoscaling/v1
+apiVersion: autoscaling/v2beta1
 kind: HorizontalPodAutoscaler
 metadata:
   name: hpa-frontend
   namespace: default
 spec:
   scaleTargetRef:
-    apiVersion: apps/v1
+    apiVersion: extensions/v1beta1
     kind: Deployment
     name: frontend
   minReplicas: 3
   maxReplicas: 10
-  targetCPUUtilizationPercentage: 50
+  metrics:
+  - type: Resource
+    resource:
+      name: memory
+      targetAverageUtilization: 80
+  - type: Resource
+    resource:
+      name: cpu
+      targetAverageUtilization: 90
 ```
 
 - Bước 6: Apply file deployment-nginx-frontend.yaml
@@ -118,8 +127,8 @@ kubectl apply -f deployment-nginx-frontend.yaml
 
 ```
 kubectl get hpa
-NAME           REFERENCE             TARGETS   MINPODS   MAXPODS   REPLICAS   AGE
-hpa-frontend   Deployment/frontend   0%/50%    2         10        2          48d
+NAME           REFERENCE             TARGETS           MINPODS   MAXPODS   REPLICAS   AGE
+hpa-frontend   Deployment/frontend   2%/80%, 1%/90%    3         10        2          48d
 ```
 
 - Bước 8: Tạo service nginx-frontend.yaml
@@ -160,8 +169,8 @@ apt install apache2-utils
 
 ```
 watch -n 1 kubectl get hpa
-NAME           REFERENCE             TARGETS   MINPODS   MAXPODS   REPLICAS   AGE
-hpa-frontend   Deployment/frontend   0%/50%    3         10        3          42d
+NAME           REFERENCE             TARGETS           MINPODS   MAXPODS   REPLICAS   AGE
+hpa-frontend   Deployment/frontend   2%/80%, 1%/90%    3         10        3          42d
 ```
 
 - Bước 12: Thực hiện test gửi request đến http://172.16.68.210:30080/
@@ -170,15 +179,24 @@ hpa-frontend   Deployment/frontend   0%/50%    3         10        3          42
 ab -c 100 -n 500000 -t 100000 http://172.16.68.210:30080/
 ```
 
-- Bước 13: Check kết quả với lệnh watch, ta thấy số lượng Pod đã tăng lên thành 5.
+- Ta cũng có thể test ram/cpu trực tiếp của các pod với lệnh `stress`.
+
+```
+kubectl exec -it frontend-68cc5f445-95d8k /bin/bash
+apt update
+apt install stress
+stress --vm 2 --vm-bytes 300M
+```
+
+- Bước 13: Check RAM/CPU của các pods với lệnh watch:
 
 ```
 watch -n 1 kubectl get hpa
-NAME           REFERENCE             TARGETS   MINPODS   MAXPODS   REPLICAS   AGE
-hpa-frontend   Deployment/frontend   85%/50%    3         10        5          42d
+NAME           REFERENCE             TARGETS             MINPODS   MAXPODS   REPLICAS   AGE
+hpa-frontend   Deployment/frontend   85%/80%, 99%/90%    3         10        5          42d
 ```
 
-- Bước 14: Check số lượng pod sau khi test
+- Bước 14: Check số lượng pod sau khi test, ta thấy số lượng Pod đã tăng lên thành 5.
 
 ```
 kubectl get pod
