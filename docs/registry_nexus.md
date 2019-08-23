@@ -126,13 +126,19 @@ user  nginx;
 }
 ```
 
-- B2: Cài đặt docker-compose:
+- B2: Cài đặt Docker: 
 
 ```
-apt install docker.io docker-compose -y
+https://www.digitalocean.com/community/tutorials/how-to-install-and-use-docker-on-ubuntu-18-04
 ```
 
-- B3: Tạo file docker-compose.yaml:
+- B3: Cài đặt docker-compose:
+
+```
+https://www.digitalocean.com/community/tutorials/how-to-install-docker-compose-on-ubuntu-18-04
+```
+
+- B4: Tạo file docker-compose.yaml:
 
 ```
 version: "2"
@@ -157,24 +163,24 @@ services:
     - nexus:nexus
 ```
 
-- B4: Apply file docker-compose.yaml
+- B5: Apply file docker-compose.yaml
 
 ```
 docker-compose up -d
 ```
 
-- B5: Truy cập vào Nexus Repository Manager với URL sau:
+- B6: Truy cập vào Nexus Repository Manager với URL sau:
 
 ```
 http://172.16.68.213:8081
 
 ```
 
-- B6: Để làm việc với nexus, ta cần đăng nhập vào với user=admin và password mặc định lưu ở /data/nexus/admin.password.
+- B7: Để làm việc với nexus, ta cần đăng nhập vào với user=admin và password mặc định lưu ở /data/nexus/admin.password.
 
 ![alt](../images/nexus_dashboard.png)
 
-- B7: Tạo repo private để lưu các docker-images. Vào phần “Server administration and configuration”, nhấn vào nút răng cưa bên cạnh ô "Search components" -> Create repository -> Chọn Recipe = docker(hosted):
+- B8: Tạo repo private để lưu các docker-images. Vào phần “Server administration and configuration”, nhấn vào nút răng cưa bên cạnh ô "Search components" -> Create repository -> Chọn Recipe = docker(hosted):
 
 ![alt](../images/nexus_config.png)
 
