@@ -24,7 +24,7 @@
 
 ### 3. Pod-to-Pod communications
 
-- Trong k8s, để kết nối giữa các pods, ta cần sử dụng 1 network plugin ngoài như Flannel, Calico, Cannal, Weave... Ở trong bài này, tôi sẽ nói về sử dụng `Flannel` và `Calico` để kết nối giữa các pods trong k8s.
+- Trong k8s, để kết nối giữa các pods, ta cần sử dụng 1 network plugin ngoài như Flannel, Calico, Cannal, Weave... Ở trong bài này, tôi sẽ nói về sử dụng `Flannel` để kết nối giữa các pods trong k8s.
 
 ### 3.1. Flannel
 
@@ -107,131 +107,6 @@
 	* Flannel sử dụng công nghệ `vxlan`: không có mã hóa giữa các node.
 	
 	* Flannel không hỗ trợ NetworkPolicy trong k8s.
-
-### 3.2. Calico
-
-### Khái niệm:
-
-- Calico là network opensource và là 1 giải pháp bảo mật mạng cho các container, virtual machines và native host-based workloads. Calico hỗ trợ một loạt các nền tảng khác nhau bao gồm: Kubernetes, OpenShift, DockerEE, OpenStack và bare metal services.
-
-- Calico hỗ trợ Full Kubernetes network policy.
-
-### Kiến trúc, các thành phần:
-
-  ![alt](../images/calico_architecture.png)
-
-- Calico được tạo thành từ các thành phần sau:
-
-	* Felix
-	
-	* Orchestrator plugin
-	
-	* Etcd
-
-	* BIRD (BGP client)
-	
-	* BGP Route Relector
-	
-#### Felix:
-
-- Felix là 1 daemon, chạy trên tất cả các node trong cụm k8s. Felix chịu trách nhiệm: **Interface management, Route programming, ACL programming, State reporting.**
-
-	- **Interface management**: 
-
-	- **Route programming**: Felix có chức năng tạo ra các routes trên mỗi node trong cụm k8s. Điều này sẽ đảm bảo định tuyến được đúng đường đi giữa các pods trong 1 cụm k8s.
-
-	- **ACL programming**: Felix cũng chịu trách nhiệm tạo ra các ACL (Access list control). Các ACL này được sử dụng để đảm bảo rằng chỉ có thể gửi các traffic hợp lệ giữa các endpoints và đảm bảo rằng các endpoints này không có khả năng phá vỡ các biện pháp bảo mật của `Calico`.
-
-	- **State reporting**: Felix cung cấp dữ liệu về tình trạng của mạng. Cụ thể, nó sẽ report các lỗi và vấn đề về mạng. Dữ liệu này được ghi vào `etcd`.
-
-#### Orchestrator plugin:
-
-- Với mỗi 1 nền tảng điều phối riêng (ví dụ: Openstack, Kubernetes), sẽ có plugin riêng. Mục đích của plugin này là liên kết giữa `Calico` với bộ điều phối, cho phép người dùng quản lí mạng `Calico` giống như họ đang quản lí các công cụ mạng được tích hợp sẵn trong bộ điều phối. Với mỗi 1 orchestation sẽ có 1 bộ API riêng.
-
-#### Etcd:
-
-- Thành phần được sử dụng để lưu trữ dữ liệu của `Calico`.
-
-#### BGP client (BIRD):
-
-- Giống như `Felix`, Calico triển khai `BGP client` trên tất cả các node trong cụm k8s. Vai trò của `BIRD` là đọc các trạng thái định tuyến từ `Felix` và phân phối nó tới trung tâm dữ liệu.
-
-- Khi `Felix` thực hiện insert các routes vào FIB của kernel Linux, `BIRD` sẽ chọn chúng và phân phối chúng đến các node khác trong cụm k8s. Điều này đảm bảo rằng traffic được định tuyến 1 cách hiệu quả, chính xác giữa các node trong cụm k8s.
-
-#### BGP route reflector (BIRD):
-
-- Đối với các mô hình triển khai k8s lớn, BGP đơn giản có thể trở thành 1 yếu tố hạn chế vì nó yêu cầu mọi BGP client phải được kết nối với mọi BGP client khác trong mạng mesh topology.
-
-  ![alt](../images/mesh_peering.png)
-  
-- Điều này đòi hỏi số lượng kết nối ngày càng tăng nhanh chóng trở nên khó khăn để duy trì. Vì lí do này, trong các mô hình triển khai lớn, Calico sẽ triển khai `BGP route reflector`. Thành phần này, thường được sử dụng trong Internet, hoạt động như 1 điểm trung tâm mà các BGP client kết nối đến, ngăn các BGP client không cần phải nói chuyện trực tiếp với các BGP client khác trong cụm.
-
-  ![alt](../images/BGP_reflection.png)
-  
-- BGP route reflector có nhiệm vụ **phân phối tuyến đường tập trung**:
-
-  ![alt](../images/BGP_reflection2.png)
-  
-- Khi `BGP client` quảng cáo các tuyến đường từ FIB của nó đến `BGP route reflector`, `BGP route reflector` sẽ quảnq cáo các tuyến đó ra các node khác trong quá trình triển khai.
-
-#### Cơ chế kết nối giữa các pods:
-
-- Calico hỗ trợ đóng gói (encapsulation) để có thể gửi traffic giữa các pods mà không yêu cầu hạ tầng mạng bên dưới phải biết về địa chỉ IP của các pods.
-
-- Calico hỗ trợ 2 loại đóng gói: `VXLAN` và `IP-in-IP`. VXLAN được hỗ trợ trong 1 số môi trường không có `IP in IP` (ví dụ: Azure). Tuy nhiên, VXLAN có hạn chế hơn chút về mặt hiệu năng, bởi vì gói tin `VXLAN` có header lớn hơn so với `IP in IP`. Sau đây tôi sẽ giải thích rõ hơn về điều này:
-
-- `MTU` là 1 thuộc tính global của path network giữa các endpoints, nên MTU workloads cần được đặt thành MTU tối thiểu của bất kỳ path network nào mà gói tin có thể đi qua.
-
-- Nếu bạn đang sử dụng overlays như `IP-in-IP` hoặc `VXLAN`, overlay header bổ sung được sử dụng bởi các giao thức đó sẽ giảm MTU tối thiểu theo kích thước của header. `IP-in-IP` sử dụng header 20 byte, VXLAN sử dụng header 50 byte. Vì thế:
-	
-	* Nếu sử dụng `VXLAN` ở bất cứ đâu trong pod network, bạn nên chọn 1 MTU là MTU mạng trừ 50.
-		
-	* Nếu sử dụng `IP-in-IP`, bạn nên chọn 1 MTU là MTU mạng trừ 20.
-		
-- Bảng kích thước MTU phổ biến:
-
-  ![alt](../images/tables-mtu.png)
-  
-- MTU mặc định cho workload interfaces là 1500, đây là để phù hợp với kích thước MTU mạng phổ biến nhất. MTU mặc định cho `IP-in-IP` tunnel là 1440 để phù hợp với giá trị cần thiết trong GCE. Tương tự, mặc định cho VXLAN là 1410.
-
-#### Mô hình kết nối:
-  
-  ![alt](../images/pod_calico_connect.png)
-  
-  
-	* Configure IP in IP encapsulation for only cross subnet traffic
-	
-    * Configure IP in IP encapsulation for all inter workload traffic
-	
-    * Configure VXLAN encapsulation for all inter workload traffic
-
-#### Configure IP in IP encapsulation for only cross subnet traffic
-
-  ```
-  apiVersion: projectcalico.org/v3
-  kind: IPPool
-  metadata:
-    name: ippool-cross-subnet-1
-  spec:
-    cidr: 192.168.0.0/16
-    ipipMode: CrossSubnet
-    natOutgoing: true
-  ```
-
-#### Configure IP in IP encapsulation for all inter workload traffic
-
-- Đây là cấu hình mặc định khi sử dụng `Calico`
-
-  ```
-  apiVersion: projectcalico.org/v3
-  kind: IPPool
-  metadata:
-    name: ippool-ipip-1
-  spec:
-    cidr: 192.168.0.0/16
-    ipipMode: Always
-    natOutgoing: true
-  ```
 
 ### NetworkPolicy trong k8s
 
@@ -325,8 +200,6 @@
 	* NodePort
 	
 	* LoadBalancer
-
-- Phần này, mình sẽ giới thiệu về kiểu ClusterIP trong service.
 
 
 	

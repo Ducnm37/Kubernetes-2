@@ -11,7 +11,7 @@ git clone https://github.com/kubernetes-incubator/metrics-server.git
 kubectl create -f deploy/1.8+/
 ```
 
-- Bước 2: Nếu triển khai k8s trên AWS bởi EKS hoặc Google GKE sẽ không bị gặp lỗi `Metrics server issue with hostname resolution of kubelet and apiserver unable to communicate with metric-server clusterIP`, nhưng ta dùng kubeadm để cài đặt trên bare metal sẽ gặp lỗi này, ta cần edit lại file metrics-server-deployment.yaml.
+- Bước 2: Nếu triển khai k8s trên AWS bởi EKS hoặc Google GKE sẽ không bị gặp lỗi `Metrics server issue with hostname resolution of kubelet and apiserver unable to communicate with metric-server clusterIP`, nhưng dùng kubeadm để cài đặt trên bare metal sẽ gặp lỗi này, ta cần edit lại file metrics-server-deployment.yaml.
 
 ```
 apiVersion: extensions/v1beta1

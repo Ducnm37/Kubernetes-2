@@ -1,1 +1,1 @@
-### Ghi chép tìm hiểu về Kubernetes.
+### Ghi chép về Kubernetes.

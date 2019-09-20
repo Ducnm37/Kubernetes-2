@@ -4,7 +4,7 @@
 
 ![alt](../images/ha-cluster-k8s-topology.png)
 
-- Trong mô hình này, mình sẽ hướng dẫn các bạn triển khai 1 cụm HA cluster k8s với external etcd.
+- Trong mô hình này sẽ triển khai 1 cụm HA cluster k8s với external etcd.
 
 ### 2. Môi trường cài đặt
 
@@ -279,13 +279,13 @@ cp -i /etc/kubernetes/admin.conf $HOME/.kube/config
 chown $(id -u):$(id -g) $HOME/.kube/config
 ```
 
-- Tiếp theo, ta triển khai `flannel` network đến cụm k8s:
+- Triển khai `flannel` network đến cụm k8s:
 
 ```
 kubectl apply -f https://raw.githubusercontent.com/coreos/flannel/a70459be0084506e4ec919aa1c114638878db11b/Documentation/kube-flannel.yml
 ```
 
-- Thực hiện join các node master vào cụm k8s, ta thực hiện trên 2 node master2 và master3:
+- Join các node master vào cụm k8s, thực hiện trên 2 node master2 và master3:
 
 ```
 kubeadm join 172.16.68.215:6445 --token dzvrxa.3m8ajhpiycj3btek     --discovery-token-ca-cert-hash sha256:d770d2a3e3494fcc090641de61     --experimental-control-plane --certificate-key 635054d25d49336bdd9022ceebe44
@@ -298,7 +298,7 @@ chown $(id -u):$(id -g) $HOME/.kube/config
 
 ```
 
-- Nếu dựng 1 cụm k8s tách riêng các node master với các node worker thì mặc định khi triển khai các service, k8s sẽ chỉ thực hiện deploy các pod lên các node worker mà ko deploy lên các node master. Để thực hiện 1 node vừa làm master và làm worker, ta cần thực hiện lệnh sau:
+- Để thực hiện 1 node vừa làm master và worker, ta cần thực hiện lệnh sau:
 
  ```
  kubectl taint nodes --all node-role.kubernetes.io/master-
@@ -340,7 +340,7 @@ kube-scheduler-master-2            1/1     Running   0          76m
 kube-scheduler-master-3            1/1     Running   0          76m
 ```
 
-- Nếu bạn thực hiện build cụm k8s với các node master và node worker tách biệt, thực hiện join các work node vào cụm k8s, ta thực hiện trên tất cả các worker node 
+- Nếu build cụm k8s với các node master và node worker tách biệt, thực hiện join các work node vào cụm k8s, ta thực hiện trên các worker node:
 
 ```
 kubeadm join 172.16.68.215:6443 --token dzvrxa.3m8ajhpiycj3btek --discovery-token-ca-cert-hash sha256:d770d2a3e3494fcc090641de61e005b2b6d8
@@ -348,7 +348,7 @@ kubeadm join 172.16.68.215:6443 --token dzvrxa.3m8ajhpiycj3btek --discovery-toke
 
 #### Chú ý:
 
-- Mặc định, trong cụm k8s khi 1 node worker down thì thời gian các pods trên node đó tự động được tạo lại trên node worker khác là 5'. Ta có thể giảm thời gian này xuống, để các pods được tạo lại trên node worker khác nhanh hơn ( ở đây mình set khoảng thời gian này = 1') bằng cách thực hiện các bước sau:
+- Mặc định, trong cụm k8s khi 1 node worker down thì thời gian các pods trên node đó tự động được tạo lại trên node worker khác là 5'. Ta có thể giảm thời gian này xuống, để các pods được tạo lại trên node worker khác nhanh hơn ( ở đây tôi set khoảng thời gian này = 1') bằng cách thực hiện các bước sau:
 
 - Bước 1: Thêm `--pod-eviction-timeout=30s` vào file /etc/kubernetes/manifests/kube-controller-manager.yaml
 

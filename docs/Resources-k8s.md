@@ -70,24 +70,15 @@
 
 	* Pod là wraps (vỏ bọc) có thể chứa 1 hoặc nhiều containers. Thông thường, mỗi pod sẽ gồm 1 container.
 	
-	* Mỗi pod có 1 IP duy nhất, điều này đúng kể cả pod của bạn có 2 hoặc nhiều containers trong đó.
+	* Mỗi pod có 1 IP duy nhất, điều này đúng kể cả pod có 2 hoặc nhiều containers trong đó.
 	
-	* Containers trong pod chạy như các ứng dụng trong một máy tính độc lập vì thế ta có thể gọi từ container này sang container kia thông qua localhost. Các containers này phải sử dụng port khác nhau.
-	
-	* Các container trong pod có thể truy xuất bất cứ share volume nào của pod đó.
-	
-	
-#### Tại sao k8s cho phép nhiều hơn 1 container trong 1 pod
-
-- Các containers trong 1 pod chạy trên "logical host": Các container sử dụng chung `network namespace` (sử dụng chung IP, port space), `IPC namespace` và sử dụng chung volume được chia sẻ. Những đặc tính này làm cho các container có thể giao tiếp hiệu quả, đảm bảo dữ liệu cục bộ. 
-
-- Vậy, nếu 1 ứng dụng cần vài container chạy trên cùng 1 host, tại sao không chỉ tạo ra 1 container duy nhất với mọi thứ chúng cần? Đầu tiên, chúng có thể vi phạm nguyên tắc "1 process cho mỗi container". Thứ hai, việc sử dụng 1 vài container cho 1 ứng dụng thì đơn giản hơn, minh bạch hơn và cho phép tách biệt các software dependencied.
+  * Các containers trong 1 pod chạy trên "logical host": Các container sử dụng chung `network namespace` (sử dụng chung IP, port space, mỗi 1 containers trong pod sẽ phải sử dụng các port khác nhau.), `IPC namespace` và sử dụng chung volume được chia sẻ. Những đặc tính này làm cho các container có thể giao tiếp hiệu quả, đảm bảo dữ liệu cục bộ. 
 
 #### Các loại container trong 1 pod
 
 - `Application container`: Đây là core container của một ứng dụng, một Pod phải có loại container này, ***các mô hình Pod phổ biến thường chỉ có application container.
 
-- `Sidecar`: Pod có thể có container loại Sidecar làm một số công việc hữu ích để hỗ trợ cho application container. Container loại này thường đảm trách các vai trò như thu thập log. Một Pod có thể có nhiều Sidecar container.
+- `Sidecar`: Pod có thể có container loại Sidecar làm một số việc để hỗ trợ cho application container. Container loại này thường đảm trách các vai trò như thu thập log. Một Pod có thể có nhiều Sidecar container.
 
 - `Init`: Đôi khi cần phải thực hiện một số khởi tạo trước khi khởi chạy application container, ví dụ như khởi tạo database ban đầu. Một Pod có thể có nhiều Init container, chúng được chạy từng cái một theo thứ tự.
 
@@ -212,7 +203,7 @@
 
   ![alt](../images/replicaset.png)
 
-- Replicaset là đơn vị sinh ra để đảm bảo rằng số lượng pod của một ứng dụng muốn duy trì trong hệ thống phải được ổn định. Ví dụ khi ta deploy ứng dụng chạy nginx và nói với hệ thống rằng ở bất cứ thời điểm nào đều phải duy trì 3 pod nginx này. Khi một pod nginx crash, hệ thống k8s sẽ tự động start một pod khác lên để đảm bảo số lượng pod được định nghĩa trong ReplicaSet. Ngoài ra ReplicaSet còn cho phép định nghĩa giới hạn sử dụng tài nguyên (mem,cpu) cho mỗi pod.
+- Replicaset là đơn vị sinh ra để đảm bảo rằng số lượng pod của một ứng dụng muốn duy trì trong hệ thống phải được ổn định. Ví dụ khi deploy ứng dụng chạy nginx và nói với hệ thống rằng ở bất cứ thời điểm nào đều phải duy trì 3 pod nginx này. Khi một pod nginx crash, hệ thống k8s sẽ tự động start một pod khác lên để đảm bảo số lượng pod được định nghĩa trong ReplicaSet. Ngoài ra ReplicaSet còn cho phép định nghĩa giới hạn sử dụng tài nguyên (mem,cpu) cho mỗi pod.
 
 - Ví dụ 1 file định nghĩa replicaset:
 
@@ -287,7 +278,7 @@
   nginx-deployment   3/3     3            3           25m   nginx        nginx:1.7.9   app=nginx
   ```
   
-- Kiểm tra chi tiết các thông tin của `Deployment` với lệnh `kubectl describe deployment [deployment name]`. Để hiểu rõ về việc rolling update và rollback của 1 `deployment`, ta cần chú ý các thông tin sau: **created time stamp, labels, revision number, labels, selector, image version, events.**
+- Kiểm tra chi tiết các thông tin của `Deployment` với lệnh `kubectl describe deployment [deployment name]`. Để hiểu rõ về việc rolling update và rollback của 1 `deployment`, cần chú ý các thông tin sau: **created time stamp, labels, revision number, labels, selector, image version, events.**
 
   ```
   kubectl describe deployment nginx-deployment
@@ -326,7 +317,7 @@
   Normal  ScalingReplicaSet  16m   deployment-controller  Scaled up replica set nginx-deployment-759fccf44f to 3
   ```
   
-- Tiếp theo, thực hiện rolling updates `Deployment`: Ở trên, ta thấy image nginx trên version 1.7.9, giờ sẽ thực hiện update lên version 1.13.10
+- Tiếp theo, thực hiện rolling updates `Deployment`: Ở trên, ta thấy image nginx trên version 1.7.9, giờ sẽ thực hiện update lên version 1.13.10.
 
 - Thực hiện lệnh sau để running image nginx version 1.13.10:
 
@@ -415,7 +406,7 @@
   Volumes:	<none>
   ```
 
-- Ta thực hiện rollback lại bản `revision=1` bằng lệnh sau:
+- Thực hiện rollback lại bản `revision=1` bằng lệnh sau:
 
   ```
   kubectl rollout undo deployment/nginx-deployment --to-revision=1
@@ -437,7 +428,7 @@
 	
 ### 2.5. DaemonSet
 
-- Một `DaemonSet` trong Kubernetes đảm bảo một Pod chạy trên tất cả hoặc tập hợp các Kubernetes Node đã sẵn sàng. Một trong những ưu điểm của việc sử dụng `DaemonSet` là khi bạn thêm 1 Node mới vào Kubernetes Cluster, thì `DaemonSet` sẽ tự động sinh ra Pod trên node đó. Ngay khi Node được xóa khỏi Kubernetes Cluster, thì Pod liên quan cũng được `garbage collector` thu gom. Xóa một `DaemonSet` sẽ đồng nghĩa với việc xóa tất cả các Pod mà nó đã tạo ra. Ví dụ: `kube-proxy` là 1 `DaemonSet`. 
+- Một `DaemonSet` trong Kubernetes đảm bảo một Pod chạy trên tất cả hoặc tập hợp các Kubernetes Node đã sẵn sàng. Một trong những ưu điểm của việc sử dụng `DaemonSet` là khi thêm 1 Node mới vào Kubernetes Cluster, thì `DaemonSet` sẽ tự động sinh ra Pod trên node đó. Ngay khi Node được xóa khỏi Kubernetes Cluster, thì Pod liên quan cũng được `garbage collector` thu gom. Xóa một `DaemonSet` sẽ đồng nghĩa với việc xóa tất cả các Pod mà nó đã tạo ra. Ví dụ: `kube-proxy` là 1 `DaemonSet`. 
 
 - Các trường hợp sử dụng `DaemonSet`:
 	
